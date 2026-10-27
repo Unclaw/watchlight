@@ -94,22 +94,14 @@ npx cap add ios && npx cap sync && npx cap open ios
 
 ## Shipping it
 
-- **Hosting (incl. verification-free options)** → `docs/IPHONE_GUIDE.md`
+- **Hosting**: push to GitHub → repo Settings → Pages → Source: GitHub Actions
+  (workflow included). Terminal alternative: `surge dist`.
 
-## Documentation
+## Project layout
 
-- `docs/TECH_STACK.md` — every technology choice, the alternatives rejected,
-  and the performance budgets vs measured numbers.
-- `docs/ARCHITECTURE.md` — module map, scene flow, the game loop, wave
-  pipeline & determinism, entity contracts, UI conventions.
-- `docs/TESTING.md` — test layers, the CDP e2e harness design and patterns,
-  known gaps.
-- `docs/IPHONE_GUIDE.md` — how to build and ship to iPhone: PWA today
-  (no Mac) and the Capacitor → TestFlight path for later.
-- `DEV_NOTES.md` — hard-won invariants and testing gotchas (Phaser restart
-  lifecycle, wave-state coupling, headless-Chromium quirks, the runtime API
-  the smoke suite depends on). Read before refactoring.
-- `docs/STACK.md` documents the agent environment the project was built in.
+- `src/` — game code (Phaser scenes, entities, UI, config-driven content)
+- `scripts/` — headless test harness (CDP e2e), balance simulator, tooling
+- `.github/workflows/` — GitHub Pages auto-deploy
 
 ## Status / roadmap
 
