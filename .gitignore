@@ -1,0 +1,11 @@
+node_modules/
+dist/
+reports/
+*.log
+.DS_Store
+/*.png
+scripts/.sim-bundle.mjs
+scripts/.sim-policies.mjs
+theme-variants/
+ui-audit*/
+/watchlight.bundle
