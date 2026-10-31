@@ -147,7 +147,7 @@ try {
   await evl(`window.__game.scene.getScene('Game').scene.start('Menu'), true`);
   await sleep(1200);
   await shot('12-menu');
-  await click(360, 970); // How to Play (middle of the 3-button row, endless visible after victory)
+  await click(360, 1136); // How to Play (3-button utility row, new menu layout)
   await sleep(500);
   await shot('13-how-to-play');
 } catch (err) {

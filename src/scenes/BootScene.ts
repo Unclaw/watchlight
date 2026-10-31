@@ -32,7 +32,7 @@ function regularPoly(cx: number, cy: number, r: number, n: number, rot = 0): { x
 
 /** Murk enemy: dark core, emissive edge, soft glow — shape = identity. */
 function enemyTexture(scene: Phaser.Scene, kind: string, color: number): void {
-  const size = kind === 'boss' ? 150 : kind === 'swarm' ? 46 : 74;
+  const size = kind === 'heartwood' ? 190 : kind === 'boss' ? 150 : kind === 'miniboss' ? 110 : kind === 'swarm' ? 46 : 74;
   const s = size * S;
   const g = scene.add.graphics();
   const c = s / 2;
@@ -90,6 +90,37 @@ function enemyTexture(scene: Phaser.Scene, kind: string, color: number): void {
       g.fillStyle(0xffffff, 0.85); g.fillCircle(c, c, r * 0.16);
       break;
     }
+    case 'miniboss': {
+      // boss-litre: heavy hexagon, double ring — same family, smaller crown
+      const pts = regularPoly(c, c, r, 6, -Math.PI / 2);
+      glowRings(g, s / 2, color, 4);
+      coreFill(); polyPath(g, pts); g.fillPath();
+      g.lineStyle(5 * S, color, 1); polyPath(g, pts); g.strokePath();
+      const inner = regularPoly(c, c, r * 0.6, 6, -Math.PI / 2);
+      g.lineStyle(2.5 * S, color, 0.55); polyPath(g, inner); g.strokePath();
+      g.fillStyle(0xffffff, 0.8); g.fillCircle(c, c, r * 0.14);
+      break;
+    }
+    case 'heartwood': {
+      // the Heartwood Murk: corrupted tree-rings — jagged 12-gon crowns
+      glowRings(g, s / 2, color, 5);
+      const outer = regularPoly(c, c, r, 12, 0);
+      coreFill(); polyPath(g, outer); g.fillPath();
+      g.lineStyle(7 * S, color, 1); polyPath(g, outer); g.strokePath();
+      const mid = regularPoly(c, c, r * 0.68, 12, Math.PI / 12);
+      g.lineStyle(4 * S, color, 0.7); polyPath(g, mid); g.strokePath();
+      const core = regularPoly(c, c, r * 0.4, 6, 0);
+      coreFill(); polyPath(g, core); g.fillPath();
+      g.lineStyle(3 * S, color, 0.9); polyPath(g, core); g.strokePath();
+      g.fillStyle(0xffffff, 0.9); g.fillCircle(c, c, r * 0.12);
+      // four "seeds" breathing around the core
+      for (let i = 0; i < 4; i++) {
+        const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
+        g.fillStyle(color, 0.85);
+        g.fillCircle(c + Math.cos(a) * r * 0.54, c + Math.sin(a) * r * 0.54, r * 0.07);
+      }
+      break;
+    }
   }
   g.generateTexture(`enemy_${kind}`, s, s);
   g.destroy();
@@ -141,6 +172,19 @@ function towerTexture(scene: Phaser.Scene, kind: string): void {
       g.fillRoundedRect(c - r * 0.85, c - r * 0.85, r * 1.7, r * 1.7, r * 0.35);
       g.fillStyle(0xffffff, 0.95);
       g.fillCircle(c, c, r * 0.35);
+      break;
+    }
+    case 'grove': {
+      // a sprig under an encircling wisp — support, not a weapon
+      const pts = [
+        { x: c, y: c - r }, { x: c + r * 0.7, y: c + r * 0.55 }, { x: c, y: c + r * 0.2 },
+        { x: c - r * 0.7, y: c + r * 0.55 },
+      ];
+      g.fillStyle(color, 0.9); polyPath(g, pts); g.fillPath();
+      g.lineStyle(3 * S, color, 0.95);
+      g.strokeCircle(c, c, r * 0.95);
+      g.fillStyle(0xffffff, 0.9);
+      g.fillCircle(c + r * 0.67, c - r * 0.67, r * 0.18); // the wisp
       break;
     }
   }

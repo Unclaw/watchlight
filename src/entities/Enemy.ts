@@ -1,7 +1,7 @@
 // Murk creature. Ground foes walk the path; flyers cut straight across.
 // Slows/burns use the scene's pause-aware game clock.
 import Phaser from 'phaser';
-import { COMBAT, ENEMIES, EnemyKind, waveScale, Pt } from '../config';
+import { BOSS_LIKES, COMBAT, ENEMIES, EnemyKind, waveScale, Pt } from '../config';
 import type { GameScene } from '../scenes/GameScene';
 import type { Rng } from '../rng';
 import { audio } from '../audio';
@@ -17,7 +17,7 @@ export class Enemy {
   bounty: number;
   alive = true;
 
-  private dist = 0; // ground progress (px along path)
+  dist = 0; // ground progress (px along path) — public: documented smoke field + pack summons
   private flyFrom: Pt | null = null;
   private flyTo: Pt = { x: 0, y: 0 };
   private flyT = 0;
@@ -28,6 +28,7 @@ export class Enemy {
   private burnUntil = 0;
   private burnTick = 0;
   private healTick = 0;
+  private summonTick = 0;
   private flashUntil = 0;
   private variance: number;
   x = 0;
@@ -39,8 +40,9 @@ export class Enemy {
     this.scene = scene;
     this.kind = kind;
     const def = ENEMIES[kind];
-    const scale =
-      kind === 'boss' ? 1 + COMBAT.bossHpRamp * (wave - COMBAT.bossHpAnchorWave) : waveScale(wave);
+    const scale = BOSS_LIKES.has(kind)
+      ? 1 + COMBAT.bossHpRamp * (wave - COMBAT.bossHpAnchorWave)
+      : waveScale(wave);
     this.maxHp = Math.round(def.hp * scale * scene.level.hpMult);
     this.hp = this.maxHp;
     this.speed = def.speed * rng.float(COMBAT.varianceMin, COMBAT.varianceMax);
@@ -53,6 +55,7 @@ export class Enemy {
       .setScale(0.5 * this.variance) // textures are 2× supersampled
       .setDepth(20);
     if (kind === 'boss') this.sprite.setScale(0.5 + Math.min(0.15, (wave - 10) * 0.008));
+    else if (BOSS_LIKES.has(kind)) this.sprite.setScale(0.5); // miniboss/heartwood textures authored at final size
 
     if (kind === 'flyer') {
       const from = rng.pick(scene.level.map.flyerSpawns);
@@ -66,7 +69,13 @@ export class Enemy {
   }
 
   get isBoss(): boolean {
-    return this.kind === 'boss';
+    return BOSS_LIKES.has(this.kind);
+  }
+
+  /** Place a ground foe at a given path distance (used by pack summons so
+   * the Heartwood's runners drop in BEHIND it, then overtake on foot). */
+  dropAt(dist: number): void {
+    this.dist = Math.max(0, dist);
   }
 
   /** Returns 'leak' when the creature reaches the Lantern. */
@@ -121,6 +130,15 @@ export class Enemy {
           }
         }
         if (healed) audio.play('heal');
+      }
+    }
+
+    // the Heartwood Murk calls a runner pack from behind itself
+    if (this.kind === 'heartwood') {
+      this.summonTick += dtMs;
+      if (this.summonTick >= COMBAT.summonEveryMs) {
+        this.summonTick = 0;
+        this.scene.summonPack(this);
       }
     }
 

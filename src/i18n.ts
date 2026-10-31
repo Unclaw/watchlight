@@ -52,6 +52,16 @@ const EN = {
   // ---- hud / waves ----
   lv: 'Lv.',
   waves: (n: number) => `${n} ${n === 1 ? 'wave' : 'waves'}`,
+  // ---- biome hub ----
+  biomeWoodlands: 'The Woodlands',
+  biomeDeepmarsh: 'The Deepmarsh',
+  biomeAshen: 'The Ashen Wastes',
+  comingSoon: 'Coming soon',
+  levelsCleared: (n: number, total: number) => `${n} of ${total} cleared`,
+  starsTotal: (n: number, total: number) => `${n} of ${total} ◆`,
+  biomeLevels: (n: number) => `${n} levels`,
+  back: 'Back',
+  chooseLevel: 'Choose a level',
   stripNext: (n: number) => `NEXT · WAVE ${n}`,
   stripRemaining: (n: number) => `WAVE ${n} · REMAINING`,
   waveOf: (n: number, total: number) => `WAVE ${n}/${total}`,
@@ -60,6 +70,7 @@ const EN = {
   startWave: (n: number) => `▶  Wave ${n}`,
   boss: 'BOSS',
   bossStirs: 'A BOSS STIRS',
+  heartwoodStirs: 'THE HEARTWOOD WAKES',
   // ---- build sheet ----
   raiseTower: 'RAISE A TOWER',
   statDmg: 'damage',
@@ -118,6 +129,16 @@ const RU: Partial<Record<StrKey, Entry>> = {
   // ---- hud / waves ----
   lv: 'Ур.',
   waves: (n: number) => `${n} ${plural(n, 'волна', 'волны', 'волн')}`,
+  // ---- biome hub ----
+  biomeWoodlands: 'Чаща',
+  biomeDeepmarsh: 'Глубокая топь',
+  biomeAshen: 'Пепельные пустоши',
+  comingSoon: 'Скоро',
+  levelsCleared: (n: number, total: number) => `пройдено ${n} из ${total}`,
+  starsTotal: (n: number, total: number) => `◆ ${n} из ${total}`,
+  biomeLevels: (n: number) => `${n} ${plural(n, 'уровень', 'уровня', 'уровней')}`,
+  back: 'Назад',
+  chooseLevel: 'Выбери уровень',
   stripNext: (n: number) => `ДАЛЕЕ · ВОЛНА ${n}`,
   stripRemaining: (n: number) => `ВОЛНА ${n} · ОСТАЛОСЬ`,
   waveOf: (n: number, total: number) => `ВОЛНА ${n}/${total}`,
@@ -126,6 +147,7 @@ const RU: Partial<Record<StrKey, Entry>> = {
   startWave: (n: number) => `▶  Волна ${n}`,
   boss: 'БОСС',
   bossStirs: 'БОСС ПРОБУЖДАЕТСЯ',
+  heartwoodStirs: 'СЕРДЦЕДРЕВО ПРОБУЖДАЕТСЯ',
   // ---- build sheet ----  [chip ≤ ~16 chars; stat labels ≤ 8]
   raiseTower: 'ВОЗВЕСТИ БАШНЮ',
   statDmg: 'урон',
@@ -192,6 +214,7 @@ const RU_TOWERS: Partial<Record<TowerKind, { name: string; blurb: string }>> = {
   prism: { name: 'Призма', blurb: 'луч' },
   halo: { name: 'Ореол', blurb: 'аура: замедление и урон' },
   kiln: { name: 'Горн', blurb: 'урон по площади' },
+  grove: { name: 'Роща', blurb: 'усиливает соседние башни' },
 };
 
 const RU_RUNES: Partial<Record<string, { name: string; desc: string }>> = {
@@ -206,12 +229,24 @@ const RU_RUNES: Partial<Record<string, { name: string; desc: string }>> = {
   farsight: { name: 'Дальний взгляд', desc: 'Радиус всех башен +12%.' },
   coldHeart: { name: 'Стужа', desc: 'Замедление ореола глубже (−20% скорости).' },
   fortune: { name: 'Удача', desc: 'Сразу +80 золота.' },
+  quickspark: { name: 'Быстрая искра', desc: 'Спарк стреляет на 25% быстрее.' },
+  wideLens: { name: 'Широкая линза', desc: 'Луч призмы шире на 45%.' },
+  powderKeg: { name: 'Пороховой заряд', desc: 'Урон горна +30%.' },
+  deepRoots: { name: 'Глубокие корни', desc: 'Радиус рощи +30%.' },
+  oldGrowth: { name: 'Старый лес', desc: 'Усиление рощи мощнее в полтора раза.' },
 };
 
 const RU_LEVELS: Record<number, string> = {
   1: 'Переправа',
   2: 'Долгий Дозор',
   3: 'Спуск',
+  4: 'Туманный лог',
+  5: 'Терновый лабиринт',
+  6: 'Лес огоньков',
+  7: 'Старые тропы',
+  8: 'Тихая роща',
+  9: 'Дороги корней',
+  10: 'Сердцевина',
 };
 
 export function towerName(kind: TowerKind): string {

@@ -14,14 +14,14 @@
 // NOT modeled: visuals, audio, sell/reposition, prep idle time (waves start
 // instantly — no gameplay time passes between waves anyway).
 import {
-  COMBAT, ENEMIES, EnemyKind, LEVELS, LevelDef, PathIndex, Pt, SpawnGroup, TowerKind, TOWERS,
-  makePath, waveBonus, waveGroups,
+  COMBAT, ENEMIES, EnemyKind, LEVELS, LevelDef, PathIndex, Pt, RUNES, SpawnGroup, TowerKind, TOWERS,
+  BOSS_LIKES, makePath, waveBonus, waveGroups,
 } from '../src/config';
 import { Rng } from '../src/rng';
 import { RuneId } from '../src/runes-ids';
 import {
   bountyMult, costMult, hasChains, hasSlowBurn, prismDmgMult, rangeMult, rateMult, slowMult,
-  splashMult,
+  splashMult, emberRateMult, beamWidthMult, kilnDmgMult, groveRangeMult, groveGainMult,
 } from '../src/runes';
 import { POLICIES, Policy } from './sim-policies';
 
@@ -29,7 +29,7 @@ const DT = 1000 / 60; // fixed-step frames (game caps delta at 100ms; 60fps is t
 
 interface SimEnemy {
   kind: EnemyKind; hp: number; maxHp: number; speed: number; armor: number; bounty: number;
-  alive: boolean; isBoss: boolean;
+  alive: boolean; isBoss: boolean; summonTick: number;
   dist: number; flyFrom: Pt | null; flyTo: Pt; flyT: number; flyLen: number;
   slowFactor: number; slowUntil: number; burnDps: number; burnUntil: number; burnTick: number;
   healTick: number; x: number; y: number; remaining: number;
@@ -40,12 +40,22 @@ class SimTower {
   cooldown = 0;
   auraTick = 0;
   constructor(readonly kind: TowerKind, readonly tileIndex: number, readonly x: number, readonly y: number) {}
-  // effective stats — mirror Tower getters (runes applied)
-  range(runes: Set<string>): number { return TOWERS[this.kind].tiers[this.tier].range * rangeMult(runes); }
-  rate(runes: Set<string>): number { return TOWERS[this.kind].tiers[this.tier].rate * rateMult(runes); }
-  dmg(runes: Set<string>): number {
+  // effective stats — mirror Tower getters (runes + grove buffs applied)
+  range(runes: Set<string>): number {
+    const r = TOWERS[this.kind].tiers[this.tier].range * rangeMult(runes);
+    return this.kind === 'grove' ? r * groveRangeMult(runes) : r;
+  }
+  rate(runes: Set<string>, towers: SimTower[]): number {
+    let r = TOWERS[this.kind].tiers[this.tier].rate * rateMult(runes) * groveBuff(towers, this, runes).rate;
+    if (this.kind === 'ember') r *= emberRateMult(runes);
+    return r;
+  }
+  dmg(runes: Set<string>, towers: SimTower[]): number {
     const base = TOWERS[this.kind].tiers[this.tier].dmg;
-    return this.kind === 'prism' ? base * prismDmgMult(runes) : base;
+    const g = groveBuff(towers, this, runes).dmg;
+    if (this.kind === 'prism') return base * prismDmgMult(runes) * g;
+    if (this.kind === 'kiln') return base * kilnDmgMult(runes) * g;
+    return base * g;
   }
   splash(runes: Set<string>): number { return (TOWERS[this.kind].tiers[this.tier].splash ?? 0) * splashMult(runes); }
   slow(runes: Set<string>): number { return (TOWERS[this.kind].tiers[this.tier].slow ?? 0.6) * slowMult(runes); }
@@ -53,6 +63,22 @@ class SimTower {
     if (this.tier >= 2) return null;
     return Math.round(TOWERS[this.kind].tiers[this.tier + 1].cost * costMult(runes));
   }
+}
+
+/** Product of covering Wisp Grove buffs (mirror GameScene.groveBuffFor,
+ * including the Old Growth gain scaling). */
+function groveBuff(towers: SimTower[], tower: SimTower, runes: Set<string>): { dmg: number; rate: number } {
+  let dmg = 1, rate = 1;
+  const gain = groveGainMult(runes);
+  for (const g of towers) {
+    if (g.kind !== 'grove') continue;
+    const r = g.range(runes);
+    if ((g.x - tower.x) ** 2 + (g.y - tower.y) ** 2 > r * r) continue;
+    const buff = TOWERS.grove.tiers[g.tier].buff ?? { dmg: 1, rate: 1 };
+    dmg *= 1 + (buff.dmg - 1) * gain;
+    rate *= 1 + (buff.rate - 1) * gain;
+  }
+  return { dmg, rate };
 }
 
 interface SimBolt { x: number; y: number; target: SimEnemy | null; dest: Pt; speed: number; dmg: number; dead: boolean; }
@@ -125,13 +151,15 @@ export function simulate(level: LevelDef, policy: Policy, seed: number): RunResu
   // ---- enemy lifecycle ----
   const spawnEnemy = (kind: EnemyKind) => {
     const def = ENEMIES[kind];
-    const scale = kind === 'boss' ? 1 + COMBAT.bossHpRamp * (state.waveIndex - COMBAT.bossHpAnchorWave) : 1 + 0.22 * (state.waveIndex - 1) + 0.02 * (state.waveIndex - 1) ** 2;
+    const scale = BOSS_LIKES.has(kind)
+      ? 1 + COMBAT.bossHpRamp * (state.waveIndex - COMBAT.bossHpAnchorWave)
+      : 1 + 0.22 * (state.waveIndex - 1) + 0.02 * (state.waveIndex - 1) ** 2;
     const speed = def.speed * varianceRng.float(COMBAT.varianceMin, COMBAT.varianceMax);
     varianceRng.float(0.92, 1.08); // sprite scale variance (visual, consume anyway)
     const e: SimEnemy = {
       kind, hp: Math.round(def.hp * scale * level.hpMult), maxHp: Math.round(def.hp * scale * level.hpMult),
       speed, armor: def.armor + Math.floor(state.waveIndex / COMBAT.armorPerWaves), bounty: def.bounty,
-      alive: true, isBoss: kind === 'boss',
+      alive: true, isBoss: BOSS_LIKES.has(kind), summonTick: 0,
       dist: 0, flyFrom: null, flyTo: { x: 0, y: 0 }, flyT: 0, flyLen: 1,
       slowFactor: 1, slowUntil: 0, burnDps: 0, burnUntil: 0, burnTick: 0, healTick: 0,
       x: 0, y: 0, remaining: 0,
@@ -171,8 +199,7 @@ export function simulate(level: LevelDef, policy: Policy, seed: number): RunResu
       const p = path.posAt(e.dist);
       e.x = p.x; e.y = p.y;
       e.remaining = path.len - e.dist;
-    }
-    // burn (armor-ignoring) — kills return early: a corpse cannot leak (Enemy.update)
+    }    // burn (armor-ignoring) — kills return early: a corpse cannot leak (Enemy.update)
     if (state.gameTime < e.burnUntil && e.burnDps > 0) {
       e.burnTick += DT;
       if (e.burnTick >= 250) {
@@ -196,6 +223,17 @@ export function simulate(level: LevelDef, policy: Policy, seed: number): RunResu
         }
       }
     }
+    // the Heartwood Murk calls a runner pack from behind itself (GameScene.summonPack)
+    if (e.kind === 'heartwood') {
+      e.summonTick += DT;
+      if (e.summonTick >= COMBAT.summonEveryMs) {
+        e.summonTick = 0;
+        for (let i = 0; i < COMBAT.summonCount; i++) {
+          spawnEnemy('runner'); // consumes combat-variance stream, like the real game
+          state.enemies[state.enemies.length - 1].dist = Math.max(0, e.dist - COMBAT.summonTrailPx * (i + 1));
+        }
+      }
+    }
     if (e.remaining <= 0) { e.alive = false; return true; } // leak
     return false;
   };
@@ -216,10 +254,10 @@ export function simulate(level: LevelDef, policy: Policy, seed: number): RunResu
     const ang = Math.atan2(target.y - t.y, target.x - t.x);
     const len = t.range(state.runes) * 1.25;
     const bx = t.x + Math.cos(ang) * len, by = t.y + Math.sin(ang) * len;
-    const width = COMBAT.beamWidthBase + t.tier * COMBAT.beamWidthPerTier;
+    const width = (COMBAT.beamWidthBase + t.tier * COMBAT.beamWidthPerTier) * beamWidthMult(state.runes);
     for (const e of state.enemies) {
       if (!e.alive) continue;
-      if (distToSeg(e.x, e.y, t.x, t.y, bx, by) < width + 12) damage(e, t.dmg(state.runes));
+      if (distToSeg(e.x, e.y, t.x, t.y, bx, by) < width + 12) damage(e, t.dmg(state.runes, state.towers));
     }
   };
 
@@ -244,10 +282,11 @@ export function simulate(level: LevelDef, policy: Policy, seed: number): RunResu
   };
 
   const updateTower = (t: SimTower) => {
+    if (t.kind === 'grove') return; // support tower: no attack of its own
     if (t.kind === 'halo') {
       t.auraTick -= DT;
       if (t.auraTick <= 0) {
-        t.auraTick = 1000 / t.rate(state.runes);
+        t.auraTick = 1000 / t.rate(state.runes, state.towers);
         const until = state.gameTime + COMBAT.auraSlowMs;
         const r2 = t.range(state.runes) ** 2;
         for (const e of state.enemies) {
@@ -258,7 +297,7 @@ export function simulate(level: LevelDef, policy: Policy, seed: number): RunResu
             e.burnDps = Math.max(e.burnDps, COMBAT.slowBurnDps);
             e.burnUntil = Math.max(e.burnUntil, until);
           }
-          damage(e, t.dmg(state.runes));
+          damage(e, t.dmg(state.runes, state.towers));
         }
       }
       return;
@@ -267,8 +306,8 @@ export function simulate(level: LevelDef, policy: Policy, seed: number): RunResu
     if (t.cooldown > 0) return;
     const target = acquire(t);
     if (!target) return;
-    t.cooldown = 1000 / t.rate(state.runes);
-    if (t.kind === 'ember') state.bolts.push({ x: t.x, y: t.y - 14, target, dest: { x: target.x, y: target.y }, speed: COMBAT.boltSpeed, dmg: t.dmg(state.runes), dead: false });
+    t.cooldown = 1000 / t.rate(state.runes, state.towers);
+    if (t.kind === 'ember') state.bolts.push({ x: t.x, y: t.y - 14, target, dest: { x: target.x, y: target.y }, speed: COMBAT.boltSpeed, dmg: t.dmg(state.runes, state.towers), dead: false });
     else if (t.kind === 'prism') fireBeam(t, target);
     else {
       // kiln shell: 750ms flight to the target's predicted position
@@ -281,7 +320,7 @@ export function simulate(level: LevelDef, policy: Policy, seed: number): RunResu
             return { x: target.flyFrom.x + (target.flyTo.x - target.flyFrom.x) * ft, y: target.flyFrom.y + (target.flyTo.y - target.flyFrom.y) * ft };
           })()
         : path.posAt(path.len - target.remaining + aheadDist);
-      state.shells.push({ from: { x: t.x, y: t.y - 14 }, to: p, t: 0, dmg: t.dmg(state.runes), radius: t.splash(state.runes), dead: false });
+      state.shells.push({ from: { x: t.x, y: t.y - 14 }, to: p, t: 0, dmg: t.dmg(state.runes, state.towers), radius: t.splash(state.runes), dead: false });
     }
   };
 
@@ -329,16 +368,14 @@ export function simulate(level: LevelDef, policy: Policy, seed: number): RunResu
       return;
     }
     if (level.runes && cleared % 5 === 0) {
-      // mirror pickRunes: filter, shuffle, offer 3 — policy picks one
+      // mirror pickRunes: real RUNES table, filter, shuffle, offer 3 — policy picks one
       const owned = new Set(state.runes);
-      const pool = [
-        ...[
-          ['emberChains', 'ember'], ['focusLens', 'prism'], ['slowBurn', 'halo'], ['volatile', 'kiln'],
-        ].filter(([_, tower]) => level.towers.includes(tower as TowerKind))
-          .map(([id]) => ({ id, tower: true })),
-        ...['overcharge', 'greed', 'sturdy', 'swift', 'farsight', 'fortune'].map((id) => ({ id, tower: false })),
-      ].filter((r) => (!owned.has(r.id) || r.id === RuneId.fortune));
-      const offered = runeRng.shuffle(pool.map((r) => r.id)).slice(0, 3);
+      const pool = RUNES.filter(
+        (r) =>
+          (!r.tower || level.towers.includes(r.tower)) &&
+          (!owned.has(r.id) || r.id === RuneId.fortune),
+      ).map((r) => r.id);
+      const offered = runeRng.shuffle(pool).slice(0, 3);
       applyRune(pickRune(offered));
     }
   };

@@ -5,6 +5,7 @@ import { C, CSS, FONT } from '../theme';
 import { TowerKind } from '../config';
 import { audio } from '../audio';
 import { t, tN, towerBlurb, towerName } from '../i18n';
+import { groveGainMult } from '../runes';
 import type { GameScene } from '../scenes/GameScene';
 import type { Tower } from '../entities/Tower';
 
@@ -103,12 +104,12 @@ export class BuildSheet {
     return this.buildCards.filter((bc) => this.scene.gold >= bc.cost).map((bc) => bc.kind);
   }
 
-  private drawBuildCard(card: Phaser.GameObjects.Graphics, x: number, y: number, afford: boolean): void {
+  private drawBuildCard(card: Phaser.GameObjects.Graphics, x: number, y: number, afford: boolean, w = 260): void {
     card.clear();
     card.fillStyle(C.card2, 1);
-    card.fillRoundedRect(x - 130, y - 52, 260, 108, 18);
+    card.fillRoundedRect(x - w / 2, y - 52, w, 108, 18);
     card.lineStyle(2, afford ? C.amber : C.line, afford ? 0.9 : 0.5);
-    card.strokeRoundedRect(x - 130, y - 52, 260, 108, 18);
+    card.strokeRoundedRect(x - w / 2, y - 52, w, 108, 18);
   }
 
   private sellText(tower: Tower): string {
@@ -154,44 +155,60 @@ export class BuildSheet {
     );
 
     // level gates which towers are buildable (progressive unlock)
-    const allKinds: TowerKind[] = ['ember', 'prism', 'halo', 'kiln'];
+    const allKinds: TowerKind[] = ['ember', 'prism', 'halo', 'kiln', 'grove'];
     const kinds = allKinds.filter((k) => this.scene.level.towers.includes(k));
+    // ≤4 kinds: the stable 2×2 grid (smoke-pinned coords). 5 kinds: compact
+    // 3-across rows so the sheet keeps its height on grove-unlocked levels.
+    const compact = kinds.length > 4;
+    const cardW = compact ? 218 : 260;
     kinds.forEach((kind, i) => {
-      const row = Math.floor(i / 2);
-      // standard grid: columns centred at 204 / 516 → the PAIR is centred on
-      // the viewport (old 184/496 centred at 340). An odd count's LAST card
-      // centres on screen instead of hugging the left.
-      const orphan = kinds.length % 2 === 1 && i === kinds.length - 1;
-      const x = orphan ? width / 2 : 74 + (i % 2) * 312 + 130;
-      const y = height - SHEET_H + 116 + row * 122;
+      let x: number;
+      let y: number;
+      if (compact) {
+        const row = Math.floor(i / 3);
+        const inRow = Math.min(3, kinds.length - row * 3);
+        const start = width / 2 - ((inRow - 1) * (cardW + 12)) / 2;
+        x = start + (i % 3) * (cardW + 12) + cardW / 2;
+        y = height - SHEET_H + 116 + row * 122;
+      } else {
+        const row = Math.floor(i / 2);
+        // standard grid: columns centred at 204 / 516 → the PAIR is centred on
+        // the viewport. An odd count's LAST card centres on screen instead of
+        // hugging the left.
+        const orphan = kinds.length % 2 === 1 && i === kinds.length - 1;
+        x = orphan ? width / 2 : 74 + (i % 2) * 312 + 130;
+        y = height - SHEET_H + 116 + row * 122;
+      }
       const cost = this.scene.buildCost(kind);
 
       const card = this.scene.add.graphics();
       const afford = this.scene.gold >= cost;
-      this.drawBuildCard(card, x, y, afford);
+      this.drawBuildCard(card, x, y, afford, cardW);
 
-      const icon = this.scene.add.image(x - 88, y, `tower_${kind}`).setScale(0.3);
+      const icon = this.scene.add.image(x + (compact ? -72 : -88), y, `tower_${kind}`).setScale(compact ? 0.26 : 0.3);
+      const textX = x + (compact ? -26 : -38);
       // tier pips (matches the tower panel's language): three small dots
-      for (let t = 0; t < 3; t++) {
+      for (let p = 0; p < 3; p++) {
         this.scene.add
-          .image(x + 88 + (t - 1) * 14, y - 34, 'dot')
-          .setTint(t === 0 ? C.amber : 0x2a3a63)
-          .setScale(t === 0 ? 0.16 : 0.1)
-          .setAlpha(t === 0 ? 0.95 : 0.55);
+          .image(x + (compact ? 74 : 88) + (p - 1) * 14, y - 34, 'dot')
+          .setTint(p === 0 ? C.amber : 0x2a3a63)
+          .setScale(p === 0 ? 0.16 : 0.1)
+          .setAlpha(p === 0 ? 0.95 : 0.55);
       }
       const name = this.scene.add
-        .text(x - 38, y - 30, towerName(kind), { fontFamily: FONT, fontSize: '20px', color: CSS.white, fontStyle: 'bold' })
+        .text(textX, y - 30, towerName(kind), { fontFamily: FONT, fontSize: compact ? '18px' : '20px', color: CSS.white, fontStyle: 'bold' })
         .setResolution(2).setOrigin(0, 0.5);
       const blurb = this.scene.add
-        .text(x - 38, y - 2, towerBlurb(kind), { fontFamily: FONT, fontSize: '14px', color: CSS.muted })
+        .text(textX, y - 2, towerBlurb(kind), { fontFamily: FONT, fontSize: compact ? '13px' : '14px', color: CSS.muted,
+          wordWrap: compact ? { width: 138 } : undefined })
         .setResolution(2).setOrigin(0, 0.5);
       const costT = this.scene.add
-        .text(x - 38, y + 26, `${cost} ${t('goldUnit')}`, {
-          fontFamily: FONT, fontSize: '18px', color: afford ? CSS.amber : '#ff6b7a', fontStyle: 'bold',
+        .text(textX, y + 26, `${cost} ${t('goldUnit')}`, {
+          fontFamily: FONT, fontSize: compact ? '16px' : '18px', color: afford ? CSS.amber : '#ff6b7a', fontStyle: 'bold',
         })
         .setResolution(2).setOrigin(0, 0.5);
 
-      const zone = this.scene.add.zone(x, y, 260, 108).setInteractive({ useHandCursor: true });
+      const zone = this.scene.add.zone(x, y, cardW, 108).setInteractive({ useHandCursor: true });
       zone.on('pointerup', () => {
         if (this.scene.gold < cost) {
           audio.play('deny');
@@ -248,8 +265,19 @@ export class BuildSheet {
         );
       }
     };
-    line('damage', `${Math.round(tower.dmg)}`, next ? `${Math.round(def.tiers[tower.tier + 1].dmg)}` : null, 0);
-    line('rate', `${tower.rate.toFixed(1)}/s`, next ? `${def.tiers[tower.tier + 1].rate.toFixed(1)}/s` : null, 1);
+    if (tower.kind === 'grove') {
+      // support tower: damage/rate read as the empower it grants (live, runes applied)
+      const gain = groveGainMult(this.scene.runes);
+      const buff = def.tiers[tower.tier].buff ?? { dmg: 1, rate: 1 };
+      const eff = { dmg: 1 + (buff.dmg - 1) * gain, rate: 1 + (buff.rate - 1) * gain };
+      const nb = next?.buff;
+      const nEff = nb ? { dmg: 1 + (nb.dmg - 1) * gain, rate: 1 + (nb.rate - 1) * gain } : null;
+      line('damage', `+${Math.round((eff.dmg - 1) * 100)}%`, nEff ? `+${Math.round((nEff.dmg - 1) * 100)}%` : null, 0);
+      line('rate', `+${Math.round((eff.rate - 1) * 100)}%`, nEff ? `+${Math.round((nEff.rate - 1) * 100)}%` : null, 1);
+    } else {
+      line('damage', `${Math.round(tower.dmg)}`, next ? `${Math.round(def.tiers[tower.tier + 1].dmg)}` : null, 0);
+      line('rate', `${tower.rate.toFixed(1)}/s`, next ? `${def.tiers[tower.tier + 1].rate.toFixed(1)}/s` : null, 1);
+    }
     line('range', `${Math.round(tower.range)}`, next ? `${def.tiers[tower.tier + 1].range}` : null, 2);
 
     // upgrade / sell — centred action row: 65..395 + 20 gap + 415..655

@@ -3,7 +3,7 @@
 import Phaser from 'phaser';
 import { COMBAT, ECONOMY, TOWERS, TowerDef, TowerKind } from '../config';
 import type { GameScene } from '../scenes/GameScene';
-import { rateMult, rangeMult, prismDmgMult, splashMult, slowMult, costMult, hasSlowBurn } from '../runes';
+import { rateMult, rangeMult, prismDmgMult, splashMult, slowMult, costMult, hasSlowBurn, emberRateMult, kilnDmgMult, groveRangeMult } from '../runes';
 import type { Enemy } from './Enemy';
 
 export class Tower {
@@ -19,7 +19,7 @@ export class Tower {
   sprite: Phaser.GameObjects.Image;
   private pips: Phaser.GameObjects.Graphics;
   private upMarker: Phaser.GameObjects.Image;
-  /** Halo only: persistent ground ring showing the aura's area of effect. */
+  /** Halo/Grove: persistent ground ring showing the aura's area of effect. */
   private auraRing: Phaser.GameObjects.Arc | null = null;
   private lastPulse = -1e9;
   private cooldown = 0;
@@ -56,18 +56,19 @@ export class Tower {
       repeat: -1,
       ease: 'Sine.easeInOut',
     });
-    if (kind === 'halo') {
-      // persistent influence ring: faint violet disc + stroke on the ground
+    if (kind === 'halo' || kind === 'grove') {
+      // persistent influence ring: violet disc for halo, green for grove
+      const ringColor = kind === 'grove' ? 0x47e0a0 : 0x9b8cff;
       this.auraRing = scene.add
         .arc(x, y, 10)
         .setDepth(2)
-        .setStrokeStyle(2, 0x9b8cff, 0.28)
-        .setFillStyle(0x9b8cff, 0.045);
+        .setStrokeStyle(2, ringColor, 0.28)
+        .setFillStyle(ringColor, 0.045);
       this.refreshAura();
     }
   }
 
-  /** Halo: resize the influence ring (call after range changes). */
+  /** Halo/Grove: resize the influence ring (call after range changes). */
   refreshAura(): void {
     if (this.auraRing) this.auraRing.setRadius(this.range);
   }
@@ -105,18 +106,22 @@ export class Tower {
     }
   }
 
-  // ---- effective stats (runes applied) ----
+  // ---- effective stats (runes + grove buffs applied) ----
   get range(): number {
     const r = this.def.tiers[this.tier].range * rangeMult(this.scene.runes);
-    return r;
+    return this.kind === 'grove' ? r * groveRangeMult(this.scene.runes) : r;
   }
   get rate(): number {
-    return this.def.tiers[this.tier].rate * rateMult(this.scene.runes);
+    let r = this.def.tiers[this.tier].rate * rateMult(this.scene.runes) * this.scene.groveBuffFor(this).rate;
+    if (this.kind === 'ember') r *= emberRateMult(this.scene.runes);
+    return r;
   }
   get dmg(): number {
     const base = this.def.tiers[this.tier].dmg;
-    if (this.kind === 'prism') return base * prismDmgMult(this.scene.runes);
-    return base;
+    const grove = this.scene.groveBuffFor(this).dmg;
+    if (this.kind === 'prism') return base * prismDmgMult(this.scene.runes) * grove;
+    if (this.kind === 'kiln') return base * kilnDmgMult(this.scene.runes) * grove;
+    return base * grove;
   }
   get splash(): number {
     const s = this.def.tiers[this.tier].splash ?? 0;
@@ -169,6 +174,13 @@ export class Tower {
   }
 
   update(dtMs: number, enemies: Enemy[]): void {
+    if (this.kind === 'grove') {
+      // support tower: no attack — a gentle breathing ring only
+      this.ringPulse += dtMs;
+      const s = 0.5 + Math.sin(this.ringPulse / 1100) * 0.02;
+      this.sprite.setScale(s);
+      return;
+    }
     if (this.kind === 'halo') {
       this.auraTick -= dtMs;
       this.ringPulse += dtMs;

@@ -7,7 +7,7 @@ import {
 import {
   ENEMIES, EnemyKind, GAME_H, GAME_W, LEVELS, LevelDef, PATH_WIDTH, PathIndex,
   COMBAT, RUNES, RuneDef, SpawnGroup, TowerKind, TOWERS, LevelTheme, THEMES,
-  makePath, waveBonus, waveGroups,
+  makePath, waveBonus, waveGroups, BOSS_LIKES,
 } from '../config';
 import { Rng, todayDailySeed } from '../rng';
 import { audio } from '../audio';
@@ -19,7 +19,7 @@ import { RuneOverlay } from '../ui/RuneOverlay';
 import { RuneButton } from '../ui/RuneButton';
 import { showPause, showEnd } from '../ui/Overlays';
 import { Fx } from '../systems/Fx';
-import { bountyMult, costMult, hasChains } from '../runes';
+import { bountyMult, costMult, hasChains, beamWidthMult, groveGainMult } from '../runes';
 import { RuneId } from '../runes-ids';
 import { DEBUG, debugState } from '../debug';
 import { levelName, t, tN } from '../i18n';
@@ -304,7 +304,7 @@ export class GameScene extends Phaser.Scene {
     return THEMES[this.mode === 'level' ? this.level.id : 3] ?? THEMES[3];
   }
 
-  /** Stars / moon / drifting motes / vignette — all behind the playfield. */
+  /** Stars / moon / treeline / drifting motes / vignette — all behind the playfield. */
   private drawAmbience(theme: LevelTheme): void {
     // star field: one batched graphics, deterministic per level
     if (theme.stars > 0) {
@@ -313,6 +313,25 @@ export class GameScene extends Phaser.Scene {
       for (let i = 0; i < theme.stars; i++) {
         starG.fillStyle(0xeef2ff, rng.float(0.12, 0.55));
         starG.fillCircle(rng.float(14, GAME_W - 14), rng.float(30, 760), rng.float(0.8, 1.9));
+      }
+    }
+
+    // the woodlands mark: conifer silhouettes crowding the top band —
+    // single batched graphics, deterministic per level, forest in front of
+    // the sky but behind the path (depth 0 vs path's 1)
+    if (theme.trees) {
+      const { color, count, band } = theme.trees;
+      const rng = new Rng(this.level.id * 577 + 3);
+      const tg = this.add.graphics().setDepth(0);
+      for (let i = 0; i < count; i++) {
+        const x = rng.float(-12, GAME_W + 12);
+        const h = rng.float(34, 78);
+        const baseY = rng.float(10, band);
+        const w = h * rng.float(0.42, 0.58);
+        tg.fillStyle(color, rng.float(0.5, 0.8));
+        // two stacked tiers read as a conifer at silhouette distances
+        tg.fillTriangle(x - w, baseY, x + w, baseY, x, baseY - h);
+        tg.fillTriangle(x - w * 0.68, baseY - h * 0.36, x + w * 0.68, baseY - h * 0.36, x, baseY - h * 1.26);
       }
     }
 
@@ -583,10 +602,10 @@ export class GameScene extends Phaser.Scene {
       }
     }
     this.spawnQueue.sort((a, b) => a.at - b.at);
-    const hasBoss = this.spawnQueue.some((s) => s.kind === 'boss');
-    if (hasBoss) {
+    const bossKind = this.spawnQueue.find((s) => BOSS_LIKES.has(s.kind))?.kind;
+    if (bossKind) {
       audio.play('boss');
-      this.showBanner(t('bossStirs'), CSS.red);
+      this.showBanner(t(bossKind === 'heartwood' ? 'heartwoodStirs' : 'bossStirs'), CSS.red);
       this.cameras.main.shake(250, 0.004);
     } else {
       audio.play('wave');
@@ -688,20 +707,23 @@ export class GameScene extends Phaser.Scene {
 
   private applyRune(id: RuneId): void {
     this.runes.add(id);
-    if (id === RuneId.sturdy) {
+    const def = RUNES.find((r) => r.id === id);
+    const e = def?.effect;
+    // instants live in the table (M2) — behaviour mirrors sim's applyRune
+    if (e?.kind === 'instant' && e.apply === 'sturdy') {
       this.maxHp += 8;
       this.hp = this.maxHp;
     }
-    if (id === RuneId.fortune) {
+    if (e?.kind === 'instant' && e.apply === 'fortune') {
       this.gold += 80;
       this.earned += 80;
     }
-    if (id === RuneId.farsight) {
+    // any range-affecting rune must redraw aura rings
+    if (e?.kind === 'stat' && (e.stat === 'range' || e.stat === 'groveRange')) {
       for (const t of this.towers) t.refreshAura();
     }
     // the lantern brightens and the peek button takes the new rune
     this.updateLanternGlow();
-    const def = RUNES.find((r) => r.id === id);
     if (def) this.runeButton?.addRune(def);
     this.floatText(t('runeClaimed'), CSS.violet, GAME_W / 2, 300);
   }
@@ -731,14 +753,14 @@ export class GameScene extends Phaser.Scene {
     const ay = tower.y;
     const bx = tower.x + Math.cos(ang) * len;
     const by = tower.y + Math.sin(ang) * len;
-    const width = COMBAT.beamWidthBase + tower.tier * COMBAT.beamWidthPerTier;
+    const width = (COMBAT.beamWidthBase + tower.tier * COMBAT.beamWidthPerTier) * beamWidthMult(this.runes);
     for (const e of this.enemies) {
       if (!e.alive) continue;
       if (distToSeg(e.x, e.y, ax, ay, bx, by) < width + 12) {
         e.damage(tower.dmg);
       }
     }
-    const beamHeight = COMBAT.beamHeightBase + tower.tier * COMBAT.beamHeightPerTier;
+    const beamHeight = (COMBAT.beamHeightBase + tower.tier * COMBAT.beamHeightPerTier) * beamWidthMult(this.runes);
     this.fx.beam(ax, ay, ang, len, beamHeight);
     audio.play('beam');
   }
@@ -768,6 +790,38 @@ export class GameScene extends Phaser.Scene {
 
   auraPulse(tower: Tower): void {
     this.fx.shockwave(tower.x, tower.y, tower.range);
+  }
+
+  /** Product of every Wisp Grove's buff covering this tower (multiplicative
+   * stacking; groves buffing groves is a no-op — they have no attack stats).
+   * Old Growth scales the BONUS, not the multiplier (1.15 → 1.225 at T1). */
+  groveBuffFor(tower: Tower): { dmg: number; rate: number } {
+    let dmg = 1;
+    let rate = 1;
+    const gain = groveGainMult(this.runes);
+    for (const t of this.towers) {
+      if (t.kind !== 'grove') continue;
+      const dx = t.x - tower.x;
+      const dy = t.y - tower.y;
+      if (dx * dx + dy * dy > t.range * t.range) continue;
+      const buff = t.def.tiers[t.tier].buff ?? { dmg: 1, rate: 1 };
+      dmg *= 1 + (buff.dmg - 1) * gain;
+      rate *= 1 + (buff.rate - 1) * gain;
+    }
+    return { dmg, rate };
+  }
+
+  /** The Heartwood Murk calls runner packs from behind itself (Enemy.update
+   * accumulates the timer on the game clock; summons consume the combat
+   * variance stream — deterministic per seed, see DEV_NOTES §2). */
+  summonPack(boss: Enemy): void {
+    for (let i = 0; i < COMBAT.summonCount; i++) {
+      const e = new Enemy(this, 'runner', this.waveIndex, this.rng);
+      e.dropAt(boss.dist - COMBAT.summonTrailPx * (i + 1));
+      this.enemies.push(e);
+    }
+    this.fx.burst('violet', 12, boss.x, boss.y - 26);
+    audio.play('heal');
   }
 
   flashWhite(e: Enemy): void {

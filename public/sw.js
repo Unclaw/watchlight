@@ -1,7 +1,7 @@
 // Watchlight service writer — offline-first app shell.
 // Strategy: precache the shell; stale-while-revalidate everything same-origin
 // (hashed Vite assets are immutable, so SWR is safe and instant).
-const VERSION = 'watchlight-v0.3.0'; // alpha bump: theming/UI/i18n — force PWA refresh
+const VERSION = 'watchlight-v0.4.0'; // woodlands expansion: 10 levels, grove, bosses — force PWA refresh
 const CORE = [
   './',
   './index.html',

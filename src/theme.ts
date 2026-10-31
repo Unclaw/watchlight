@@ -38,16 +38,19 @@ export const TOWER_COLOR: Record<string, number> = {
   prism: C.cyan,
   halo: C.violet,
   kiln: 0xff8b4b,
+  grove: C.green,
 };
 
 // Enemy family colours (Murk = red/magenta family; shape carries identity)
 export const ENEMY_COLOR: Record<string, number> = {
   runner: 0xff5f7a,
   swarm: 0xff8ea0,
-  shielded: 0xe05fff,
+  shielded:0xe05fff,
   flyer: 0xc86bff,
   healer: 0xff5fd0,
   boss: 0xff3b5c,
+  miniboss: 0xff4f6e,
+  heartwood: 0xff5c3d,
 };
 
 export function alpha(color: number, a: number): number {

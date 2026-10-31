@@ -12,6 +12,11 @@ export const RuneId = {
   farsight: 'farsight',
   coldHeart: 'coldHeart',
   fortune: 'fortune',
+  quickspark: 'quickspark',
+  wideLens: 'wideLens',
+  powderKeg: 'powderKeg',
+  deepRoots: 'deepRoots',
+  oldGrowth: 'oldGrowth',
 } as const;
 
 export type RuneId = (typeof RuneId)[keyof typeof RuneId];

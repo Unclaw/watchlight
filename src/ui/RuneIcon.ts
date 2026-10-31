@@ -4,7 +4,7 @@
 import Phaser from 'phaser';
 import { RuneDef } from '../config';
 
-const TOWER_GLYPHS = ['ember', 'prism', 'halo', 'kiln'];
+const TOWER_GLYPHS = ['ember', 'prism', 'halo', 'kiln', 'grove'];
 
 export function drawRuneGlyph(
   g: Phaser.GameObjects.Graphics,
