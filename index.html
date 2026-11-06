@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+  />
+  <title>Watchlight</title>
+  <meta name="description" content="A minimalist one-thumb tower defence. Keep the Last Lantern lit against the Murk." />
+  <meta name="theme-color" content="#0b1020" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Watchlight" />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png" />
+  <style>
+    :root {
+      --sat: env(safe-area-inset-top, 0px);
+      --sab: env(safe-area-inset-bottom, 0px);
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      height: 100%;
+      /* 100dvh + fixed kills iOS scroll-bounce & address-bar jumps */
+      position: fixed;
+      inset: 0;
+      overflow: hidden;
+      overscroll-behavior: none;
+      background: #0b1020;
+      color: #eef2ff;
+      font-family: -apple-system, "Avenir Next", "Segoe UI", system-ui, sans-serif;
+      touch-action: manipulation; /* no double-tap zoom, no 300ms delay */
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-touch-callout: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    #app, canvas {
+      width: 100dvw;
+      height: 100dvh;
+      display: block;
+    }
+    /* first-paint splash: instant dark frame before the engine boots */
+    #splash {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 26px;
+      background: radial-gradient(1200px 500px at 50% 30%, #182448 0%, #0b1020 70%);
+      z-index: 10;
+      transition: opacity .45s ease;
+      pointer-events: none;
+    }
+    #splash .lantern {
+      width: 54px;
+      height: 54px;
+      background: #ffc24b;
+      transform: rotate(45deg);
+      border-radius: 10px;
+      box-shadow: 0 0 40px 12px rgba(255, 194, 75, 0.45);
+      animation: pulse 2.2s ease-in-out infinite;
+    }
+    #splash .title {
+      letter-spacing: 0.34em;
+      font-size: 13px;
+      color: #93a1c4;
+      text-transform: uppercase;
+    }
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 26px 6px rgba(255, 194, 75, 0.35); }
+      50% { box-shadow: 0 0 60px 18px rgba(255, 194, 75, 0.6); }
+    }
+  </style>
+</head>
+<body>
+  <div id="app" role="application" aria-label="Watchlight tower defence game"></div>
+  <div id="splash"><div class="lantern"></div><div class="title">Watchlight</div></div>
+  <script type="module" src="/src/main.ts"></script>
+  <script>
+    // hide the splash as soon as the first Phaser canvas exists
+    var hide = function () {
+      var s = document.getElementById('splash');
+      if (!s) return;
+      s.style.opacity = '0';
+      setTimeout(function () { s.remove(); }, 500);
+    };
+    var t0 = setInterval(function () {
+      if (document.querySelector('#app canvas')) { clearInterval(t0); hide(); }
+    }, 60);
+    setTimeout(function () { clearInterval(t0); hide(); }, 4000); // failsafe
+  </script>
+</body>
+</html>
