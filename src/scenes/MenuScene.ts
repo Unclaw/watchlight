@@ -302,10 +302,15 @@ export class MenuScene extends Phaser.Scene {
     // treeline identity strip along the bottom of the card
     const strip = this.add.graphics();
     for (let i = 0; i < 16; i++) {
-      const tx = -w / 2 + 12 + (i / 15) * (w - 24) + Phaser.Math.Between(-8, 8);
       const th = Phaser.Math.Between(26, 44);
-      const base = h / 2 - 10;
       const tw = th * 0.42;
+      const base = h / 2 - 10;
+      // keep every tree fully inside the card: the widest base corners must
+      // clear the rounded-rect edge (corner arc insets ~2px at base height)
+      const tx = Phaser.Math.Clamp(
+        -w / 2 + 12 + (i / 15) * (w - 24) + Phaser.Math.Between(-8, 8),
+        -w / 2 + tw + 5, w / 2 - tw - 5,
+      );
       strip.fillStyle(0x0a1226, Phaser.Math.FloatBetween(0.55, 0.85));
       strip.fillTriangle(tx - tw, base, tx + tw, base, tx, base - th);
       strip.fillTriangle(tx - tw * 0.7, base - th * 0.38, tx + tw * 0.7, base - th * 0.38, tx, base - th * 1.26);
@@ -350,9 +355,12 @@ export class MenuScene extends Phaser.Scene {
     g.strokeRoundedRect(-w / 2, -h / 2, w, h, 16);
     const strip = this.add.graphics();
     for (let i = 0; i < 8; i++) {
-      const tx = -w / 2 + 14 + (i / 7) * (w - 28) + Phaser.Math.Between(-5, 5);
       const th = Phaser.Math.Between(14, 24);
       const base = h / 2 - 8;
+      const tx = Phaser.Math.Clamp(
+        -w / 2 + 14 + (i / 7) * (w - 28) + Phaser.Math.Between(-5, 5),
+        -w / 2 + th * 0.4 + 3, w / 2 - th * 0.4 - 3,
+      );
       strip.fillStyle(0x0a1226, 0.5);
       strip.fillTriangle(tx - th * 0.4, base, tx + th * 0.4, base, tx, base - th);
     }

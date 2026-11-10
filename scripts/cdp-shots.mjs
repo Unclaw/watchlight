@@ -163,6 +163,12 @@ try {
   await evl(`window.__game.scene.getScene('Game').scene.start('Menu'), true`);
   await sleep(1200);
   await shot('12-menu');
+  // expanded biome card — treeline strip must stay inside the card (W4.0-9)
+  await click(360, 615); // tap the Woodlands card → expands, slides to y 415
+  await sleep(700);
+  await shot('12b-menu-expanded');
+  await click(360, 415); // collapse back (zone rides the card at its expanded y)
+  await sleep(700);
   await click(360, 1136); // How to Play (3-button utility row, new menu layout)
   await sleep(500);
   await shot('13-how-to-play');

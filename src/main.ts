@@ -7,6 +7,7 @@ import { MenuScene } from './scenes/MenuScene';
 import { GameScene } from './scenes/GameScene';
 import { loadSave } from './save';
 import { audio } from './audio';
+import { WAKELOCK_LOST } from './wakeLock';
 import { setLocale } from './i18n';
 import { keepScreenAwake } from './wakeLock';
 import { DEBUG } from './debug';
@@ -35,7 +36,16 @@ const game = new Phaser.Game({
     powerPreference: 'high-performance',
     failIfMajorPerformanceCaveat: false,
   },
-  fps: { target: 60, min: 30 },
+  fps: {
+    target: 60,
+    min: 30,
+    // forceSetTimeOut is the ONLY mode that ENFORCES `target`: in rAF mode
+    // Phaser's loop re-requests every display frame, so 120Hz panels (Exynos
+    // Samsungs) rendered 120fps and cooked the phone — `target` was advisory
+    // there and `min` never engaged. Locked at 60: halves GPU/CPU work per
+    // second on high-refresh panels, identical on 60Hz screens.
+    forceSetTimeOut: true,
+  },
   disableContextMenu: true,
   scene: [BootScene, MenuScene, GameScene],
 });
@@ -52,6 +62,11 @@ window.addEventListener(
 // Installed PWAs have no browser chrome to reset the OS idle timer — the
 // wake lock is the only reliable dim/lock prevention during touch-idle play.
 keepScreenAwake();
+
+// Screen locked (wake lock released) → hard audio stop. The visibilitychange
+// handler in AudioSys covers normal backgrounding; this catches the lock
+// case on OEM quirks where the page never sees a visibility event.
+window.addEventListener(WAKELOCK_LOST, () => audio.suspend());
 
 // PWA: offline-first service worker in production only (dev = fresh HMR)
 if ('serviceWorker' in navigator && import.meta.env.PROD) {

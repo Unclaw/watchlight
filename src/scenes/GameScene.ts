@@ -30,6 +30,7 @@ import {
   beamGeom, beamHits, beamWidth, chainTargets, splashHits, stepBoltCore, stepShellCore,
 } from '../sim/combat';
 import { buildSpawnQueue, leakDamage, runeInstants, runeOfferPool, SpawnAt } from '../sim/waves';
+import { WAKELOCK_LOST } from '../wakeLock';
 import { Hud } from '../systems/Hud';
 
 type RunMode = 'level' | 'daily' | 'endless';
@@ -205,8 +206,11 @@ export class GameScene extends Phaser.Scene {
     this.selRing = this.add.graphics().setDepth(14);
     this.rangeRing = this.add.arc(0, 0, 10).setStrokeStyle(2, 0xeef2ff, 0.35).setVisible(false).setDepth(5);
 
-    // auto-pause when iOS Safari background the tab (research D8)
+    // auto-pause when iOS Safari background the tab (research D8) — and when
+    // the screen LOCKS (wake-lock release; audio hard-stops via main.ts).
+    // WAKELOCK_LOST dispatches on window and doesn't bubble — listen there.
     document.addEventListener('visibilitychange', this.onHidden);
+    window.addEventListener(WAKELOCK_LOST, this.onLockLost);
 
     // first-wave preview (wave 1 is a pure table lookup — no RNG consumed)
     this.nextWaveGroups = waveGroups(this.level, 1, this.waveRng);
@@ -251,11 +255,23 @@ export class GameScene extends Phaser.Scene {
         console.log(`SMOKE_ASSERT tiles=${this.tiles.length}/${expected} alive=${okTiles} enemies=${this.enemies.length} wave=${this.waveIndex} gold=${this.gold} chevrons=${up}/${this.towers.length}`);
       });
     }
-    this.events.once('shutdown', () => document.removeEventListener('visibilitychange', this.onHidden));
+    this.events.once('shutdown', () => {
+      document.removeEventListener('visibilitychange', this.onHidden);
+      window.removeEventListener(WAKELOCK_LOST, this.onLockLost);
+    });
   }
 
   private onHidden = (): void => {
     if (document.hidden && !this.paused && this.phase !== 'over' && this.phase !== 'won') {
+      this.openPause();
+    }
+  };
+
+  /** Screen locked mid-run (wake-lock released): full stop. On some OEM
+   *  builds no visibilitychange fires for a lock, which used to leave the
+   *  run simulating — and the soundscape feeding — in the pocket. */
+  private onLockLost = (): void => {
+    if (!this.paused && this.phase !== 'over' && this.phase !== 'won') {
       this.openPause();
     }
   };

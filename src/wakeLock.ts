@@ -9,12 +9,19 @@
 
 let sentinel: WakeLockSentinel | null = null;
 
+/** Fired when the sentinel releases: screen locked/turned off, battery-saver
+ *  force, or the document hiding (the visibilitychange path already covers
+ *  that one). Listeners: main.ts hard-stops audio; GameScene pauses the run —
+ *  screen lock must fully stop the app, not "play like a music player". */
+export const WAKELOCK_LOST = 'watchlight-wakelock-lost';
+
 async function acquire(): Promise<void> {
   if (sentinel && !sentinel.released) return;
   try {
     sentinel = await navigator.wakeLock.request('screen');
     sentinel.addEventListener('release', () => {
       sentinel = null;
+      window.dispatchEvent(new CustomEvent(WAKELOCK_LOST));
     });
   } catch {
     sentinel = null; // denied or unsupported at runtime — retry never blocks play

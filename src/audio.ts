@@ -18,12 +18,32 @@ class AudioSys {
   private master: GainNode | null = null;
   private voices = 0;
   private lastPlay: Record<string, number> = {};
+  // leak is throttled like every other combat voice (250ms): unthrottled, a
+  // leak train stacked one 110→70Hz sawtooth sweep per leaking foe — stacked
+  // buzzy bursts at wave-end that read as "electrical distortion" (2026-11-09).
   private throttles: Record<string, number> = {
-    shoot: 55, hit: 70, kill: 90, beam: 120, splash: 90, summon: 250, aura: 950,
+    shoot: 55, hit: 70, kill: 90, beam: 120, splash: 90, summon: 250, aura: 950, leak: 250,
   };
   private auraAlt = false; // halo growl: alternate the two tonalities per pulse
   muted = false;
   private ambientOn = false;
+
+  constructor() {
+    // Android audio-path hygiene (phantom "electrical distortion" report
+    // 2026-11-09): a backgrounded PWA keeps the context — and the ambient pad
+    // — rendering, and Android route changes / driver excursions can leave
+    // the output path crackling until something resets it. Suspending on
+    // hide and resuming on return forces a clean pipeline restart every time
+    // the game is backgrounded (also stops the pad while hidden = battery).
+    // Only an already-unlocked context is touched, so the gesture rule is
+    // intact; a refused resume (iOS interruption edge) is healed by the next
+    // unlock() — every button press calls it.
+    document.addEventListener('visibilitychange', () => {
+      if (!this.ctx) return;
+      if (document.hidden) this.suspend();
+      else this.resume();
+    });
+  }
 
   get unlocked(): boolean {
     return this.ctx !== null && this.ctx.state === 'running';
@@ -48,6 +68,16 @@ class AudioSys {
     if (this.master && this.ctx) {
       this.master.gain.setTargetAtTime(m ? 0 : 0.5, this.ctx.currentTime, 0.05);
     }
+  }
+
+  /** Hard audio stop (screen lock / wake-lock loss) — distinct from the mute
+   *  toggle: no state is remembered, the next resume() restarts the graph. */
+  suspend(): void {
+    if (this.ctx && this.ctx.state === 'running') void this.ctx.suspend();
+  }
+
+  resume(): void {
+    if (this.ctx && this.ctx.state !== 'running') void this.ctx.resume();
   }
 
   private budget(): boolean {

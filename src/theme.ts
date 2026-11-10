@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 
 // Watchlight visual language — "flat vector glow" on a near-black field.
-// Palette mirrored from the approved concept (concept.html :root tokens).
+// Palette mirrored from the approved concept (archive/research/concept.html :root tokens).
 export const C = {
   bg: 0x0b1020,
   bg2: 0x101830,

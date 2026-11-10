@@ -1233,18 +1233,22 @@ export const LEVELS: LevelDef[] = [
     id: 7,
     name: 'The Old Paths',
     map: {
+      // 2026-11-09 redesign (operator: "path is crossing the lantern"): high
+      // spiral — the path never dips below y=760 and the lantern moved UP to
+      // (320,620) as a clean terminal endpoint no leg crosses. 3020px (−20%);
+      // the bottom third is dedicated build space and the old button-zone
+      // tile (360,1120) is gone (closes the L7 half of the tile-zone flag).
       waypoints: [
-        { x: -60, y: 180 }, { x: 620, y: 180 }, { x: 620, y: 1000 }, { x: 120, y: 1000 },
-        { x: 120, y: 420 }, { x: 520, y: 420 }, { x: 520, y: 840 }, { x: 300, y: 840 },
-        { x: 300, y: 1000 },
+        { x: -60, y: 180 }, { x: 620, y: 180 }, { x: 620, y: 760 }, { x: 140, y: 760 },
+        { x: 140, y: 380 }, { x: 560, y: 380 }, { x: 560, y: 620 }, { x: 320, y: 620 },
       ],
       tiles: [
-        { x: 300, y: 300 }, { x: 500, y: 300 }, { x: 680, y: 600 },
-        { x: 680, y: 900 }, { x: 360, y: 910 }, { x: 200, y: 600 },
-        { x: 200, y: 780 }, { x: 420, y: 560 }, { x: 420, y: 760 },
-        { x: 200, y: 920 }, { x: 360, y: 1120 },
+        { x: 300, y: 300 }, { x: 500, y: 300 }, { x: 680, y: 300 },
+        { x: 680, y: 480 }, { x: 60, y: 600 }, { x: 240, y: 510 },
+        { x: 480, y: 500 }, { x: 240, y: 660 }, { x: 300, y: 840 },
+        { x: 200, y: 860 }, { x: 480, y: 900 },
       ],
-      lantern: { x: 300, y: 1000 },
+      lantern: { x: 320, y: 620 },
       flyerSpawns: [{ x: 760, y: 500 }, { x: -60, y: 300 }, { x: 360, y: -80 }],
     },
     waves: L7_WAVES,
@@ -1408,13 +1412,13 @@ export const RUNES: RuneDef[] = [
   { id: 'focusLens', name: 'Focus Lens', desc: 'Prism Beam damage +35%.', accent: 0x4fd8eb, glyph: 'prism', tower: 'prism', effect: { kind: 'stat', stat: 'prismDmg', mult: 1.35 } },
   { id: 'slowBurn', name: 'Slow Burn', desc: 'Halo auras ignite: +8 damage per second.', accent: 0x9b8cff, glyph: 'halo', tower: 'halo', effect: { kind: 'flag', flag: 'slowBurn' } },
   { id: 'volatile', name: 'Volatile Kiln', desc: 'Kiln splash radius +35%.', accent: 0xff8b4b, glyph: 'kiln', tower: 'kiln', effect: { kind: 'stat', stat: 'splash', mult: 1.35 } },
-  { id: 'overcharge', name: 'Overcharge', desc: 'All towers fire 15% faster.', accent: 0xffc24b, glyph: 'bolt', effect: { kind: 'stat', stat: 'rate', mult: 1.15 } },
-  { id: 'greed', name: 'Greed', desc: 'All bounties +30%.', accent: 0x47e0a0, glyph: 'coinStack', effect: { kind: 'stat', stat: 'bounty', mult: 1.3 } },
+  { id: 'overcharge', name: 'Overcharge', desc: 'All towers fire 15% faster.', accent: 0xdce4f5, glyph: 'bolt', effect: { kind: 'stat', stat: 'rate', mult: 1.15 } },
+  { id: 'greed', name: 'Greed', desc: 'All bounties +30%.', accent: 0xefcfa0, glyph: 'coinStack', effect: { kind: 'stat', stat: 'bounty', mult: 1.3 } },
   { id: 'sturdy', name: 'Sturdy Heart', desc: 'Lantern +8 max HP and fully refilled.', accent: 0xff6b7a, glyph: 'heart', effect: { kind: 'instant', apply: 'sturdy' } },
-  { id: 'swift', name: 'Swift Hands', desc: 'Build & upgrade costs −12%.', accent: 0x4fd8eb, glyph: 'hand', effect: { kind: 'stat', stat: 'cost', mult: 0.88 } },
-  { id: 'farsight', name: 'Long Sight', desc: 'All tower range +12%.', accent: 0x9b8cff, glyph: 'eye', effect: { kind: 'stat', stat: 'range', mult: 1.12 } },
+  { id: 'swift', name: 'Swift Hands', desc: 'Build & upgrade costs −12%.', accent: 0xefcfa0, glyph: 'hand', effect: { kind: 'stat', stat: 'cost', mult: 0.88 } },
+  { id: 'farsight', name: 'Long Sight', desc: 'All tower range +12%.', accent: 0xdce4f5, glyph: 'eye', effect: { kind: 'stat', stat: 'range', mult: 1.12 } },
   { id: 'coldHeart', name: 'Cold Heart', desc: 'Halo slow deepens (foes crawl 20% slower).', accent: 0x4fd8eb, glyph: 'snow', tower: 'halo', effect: { kind: 'stat', stat: 'slow', mult: 0.8 } },
-  { id: 'fortune', name: 'Fortune', desc: 'Gain 80 gold immediately.', accent: 0x47e0a0, glyph: 'sparkle', effect: { kind: 'instant', apply: 'fortune' } },
+  { id: 'fortune', name: 'Fortune', desc: 'Gain 80 gold immediately.', accent: 0xefcfa0, glyph: 'sparkle', effect: { kind: 'instant', apply: 'fortune' } },
   // ---- second variants: every tower offers at least two exclusive picks ----
   { id: 'quickspark', name: 'Quickspark', desc: 'Ember Spire fires 25% faster.', accent: 0xffc24b, glyph: 'bolt', tower: 'ember', effect: { kind: 'stat', stat: 'emberRate', mult: 1.25 } },
   { id: 'wideLens', name: 'Wide Lens', desc: 'Prism beams are 45% wider, catching whole columns.', accent: 0x4fd8eb, glyph: 'eye', tower: 'prism', effect: { kind: 'stat', stat: 'beamWidth', mult: 1.45 } },
