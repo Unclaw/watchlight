@@ -20,6 +20,8 @@ export const DEBUG = {
   assert: params.get('assert') === '1',
   /** Locale override (en | ru) — preview with ?lang=ru. */
   lang: (params.get('lang') as 'en' | 'ru' | null) ?? undefined,
+  /** Woods-overlay style override (frame | encroach | surround) — decor review. */
+  woods: params.get('woods') as 'frame' | 'encroach' | 'surround' | null,
 } as const;
 
 /** Mutable holder for one-shot debug behaviours (restart fires once). */

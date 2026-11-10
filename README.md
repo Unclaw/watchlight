@@ -5,7 +5,7 @@ Murk-creatures. Short, replayable runs; roguelite rune picks. Plays anywhere —
 tablet, desktop — and installs from the browser as an offline PWA. **Non-commercial** —
 an exploration of possibilities, free to play, nothing sold.
 
-**Status:** beta v0.8.1 — live on GitHub Pages · **Stack:** TypeScript (strict) · Vite ·
+**Status:** beta v0.8.3 — live on GitHub Pages · **Stack:** TypeScript (strict) · Vite ·
 Phaser 3 · PWA (a native wrap via Capacitor stays optional).
 **Languages:** English + Русский — auto-detected from the device, switchable on the
 menu (bottom row), overridable per URL with `?lang=ru|en`. All strings live in `src/i18n.ts`.
@@ -77,7 +77,7 @@ src/
                      shared with the e2e tests), RuneButton/RuneOverlay, Overlays
 scripts/
   gen-icons.mjs      dependency-free PNG icon generator (same art language)
-  cdp-smoke.mjs      33-check e2e via CDP (no deps): real clicks, asserts build/sell/waves
+  cdp-smoke.mjs      35-check e2e via CDP (no deps): real clicks, asserts build/sell/waves
   cdp-bot.mjs        plays a full level headless (balance validation)
   sim.mjs            balance simulator: policies × seeds over the shared src/sim core
   cdp-shots.mjs      screenshots of every UI state; check-shot.mjs decodes coverage
@@ -126,14 +126,15 @@ npx cap add ios && npx cap sync && npx cap open ios
 
 ## Status / roadmap
 
-**Beta, live on GitHub Pages** — v0.8.1: the full **Woodlands arc** with the
-Root & Sprout finale; balance is sim-validated (30-seed policy sweeps) plus
-external playtesters.
+**Beta, live on GitHub Pages** — v0.8.3: the full **Woodlands arc** with the
+Root & Sprout finale; balance is sim-validated (30-seed policy sweeps) and
+level reworks are 0-leak-probed (L7/L8/L9 all have attainable perfect runs).
 
 Shipped so far:
 
-- 10-level **Woodlands** arc (biome hub menu, per-level ambience themes,
-  progressive tower/roster unlocks) — L1 *The Crossing* → L10 *The Heartwood*
+- 10-level **Woodlands** arc (biome hub menu, per-level ambience themes with
+  the woodland-frame overlay, progressive tower/roster unlocks) —
+  L1 *The Crossing* → L10 *The Heartwood*
 - 5 towers × 3 tiers — incl. the Wisp Grove support tower (L6+)
 - 8 enemy families — runners, swarm, shielded, flyers, healers, boss,
   miniboss, and the Heartwood Murk finale boss (**Root & Sprout**: roots at

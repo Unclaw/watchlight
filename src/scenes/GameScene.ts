@@ -367,20 +367,72 @@ export class GameScene extends Phaser.Scene {
 
     // the woodlands mark: conifer silhouettes crowding the top band —
     // single batched graphics, deterministic per level, forest in front of
-    // the sky but behind the path (depth 0 vs path's 1)
+    // the sky but behind the path (depth 0 vs path's 1). The woods style
+    // (theme or ?woods= override) wraps the frame: side columns and/or a
+    // bottom floor strip, all behind the playfield.
     if (theme.trees) {
       const { color, count, band } = theme.trees;
+      const style = DEBUG.woods ?? theme.trees.style ?? null;
       const rng = new Rng(this.level.id * 577 + 3);
       const tg = this.add.graphics().setDepth(0);
-      for (let i = 0; i < count; i++) {
-        const x = rng.float(-12, GAME_W + 12);
-        const h = rng.float(34, 78);
-        const baseY = rng.float(10, band);
+      const conifer = (x: number, baseY: number, h: number, a: number) => {
         const w = h * rng.float(0.42, 0.58);
-        tg.fillStyle(color, rng.float(0.5, 0.8));
-        // two stacked tiers read as a conifer at silhouette distances
+        tg.fillStyle(color, a);
         tg.fillTriangle(x - w, baseY, x + w, baseY, x, baseY - h);
         tg.fillTriangle(x - w * 0.68, baseY - h * 0.36, x + w * 0.68, baseY - h * 0.36, x, baseY - h * 1.26);
+      };
+      for (let i = 0; i < count; i++) {
+        conifer(rng.float(-12, GAME_W + 12), rng.float(10, band), rng.float(34, 78), rng.float(0.5, 0.8));
+      }
+
+      if (style === 'frame') {
+        // balanced frame: regular side columns + a bottom strip
+        const sr = new Rng(this.level.id * 577 + 91);
+        for (let i = 0; i < count * 0.5; i++) {
+          const h = sr.float(30, 70);
+          conifer(sr.float(-8, 58), sr.float(70, GAME_H - 60), h, sr.float(0.5, 0.78));
+          conifer(GAME_W - sr.float(-8, 58), sr.float(70, GAME_H - 60), h, sr.float(0.5, 0.78));
+        }
+        const fr = new Rng(this.level.id * 577 + 157);
+        for (let i = 0; i < count * 0.7; i++) {
+          conifer(fr.float(0, GAME_W), GAME_H + 10, fr.float(40, 90), fr.float(0.5, 0.78));
+        }
+      } else if (style === 'encroach') {
+        // organic: clusters of large fingers pinch in from the edges, sparse floor
+        const sr = new Rng(this.level.id * 577 + 211);
+        for (let i = 0; i < count * 0.35; i++) {
+          const h = sr.float(50, 110);
+          const y = sr.float(90, GAME_H - 120);
+          // 2-3 tree cluster reaching inward
+          const cx = sr.float(20, 128);
+          for (let k = 0; k < sr.int(2, 3); k++) {
+            conifer(cx + sr.float(-22, 22), y + sr.float(-16, 16), h * sr.float(0.7, 1), sr.float(0.45, 0.7));
+            conifer(GAME_W - cx + sr.float(-22, 22), y + sr.float(-16, 16), h * sr.float(0.7, 1), sr.float(0.45, 0.7));
+          }
+        }
+        const fr = new Rng(this.level.id * 577 + 307);
+        for (let i = 0; i < count * 0.35; i++) {
+          const h = fr.float(30, 60);
+          conifer(fr.float(0, GAME_W), GAME_H + 8, h, fr.float(0.45, 0.7));
+          if (fr.float(0, 1) < 0.18) conifer(fr.float(60, GAME_W - 60), GAME_H + 8, 92, 0.6); // rare sentinel
+        }
+      } else if (style === 'surround') {
+        // canopy wall: packed two-tone rows on sides + floor
+        const sr = new Rng(this.level.id * 577 + 401);
+        for (let y = 80; y < GAME_H - 50; y += sr.float(24, 34)) {
+          const h = sr.float(40, 85);
+          // back row lighter + offset outward, front row darker — parallax depth
+          conifer(sr.float(-20, 34), y + sr.float(-8, 8), h * 0.85, 0.42);
+          conifer(sr.float(26, 64), y + sr.float(-6, 6), h, sr.float(0.52, 0.75));
+          conifer(GAME_W - sr.float(-20, 34), y + sr.float(-8, 8), h * 0.85, 0.42);
+          conifer(GAME_W - sr.float(26, 64), y + sr.float(-6, 6), h, sr.float(0.52, 0.75));
+        }
+        const fr = new Rng(this.level.id * 577 + 523);
+        for (let x = -10; x < GAME_W + 10; x += fr.float(20, 30)) {
+          const h = fr.float(55, 100);
+          conifer(x + fr.float(-8, 8), GAME_H + 14, h * 0.8, 0.42); // back
+          conifer(x + fr.float(-6, 6), GAME_H + 6, h, fr.float(0.52, 0.75)); // front
+        }
       }
     }
 

@@ -179,6 +179,13 @@ export function waveScale(wave: number): number {
 // Per-level ambience within the flat-vector-glow language: the night
 // deepens as the descent progresses. All decor is cheap (one batched
 // Graphics for stars, ≤12 additive motes, glow-sprite vignette corners).
+
+/** Woods-overlay style: how far the forest wraps around the playfield.
+ *  - 'frame'    — side columns + bottom strip, moderate and regular
+ *  - 'encroach' — fewer, larger canopy fingers pinching in + sparse floor
+ *  - 'surround' — continuous packed canopy wall on all edges (densest) */
+export type WoodsStyle = 'frame' | 'encroach' | 'surround';
+
 export interface LevelTheme {
   /** Camera background. */
   bg: number;
@@ -194,8 +201,12 @@ export interface LevelTheme {
   /** Drifting ambient motes (color, count) — fireflies / spores / mist. */
   motes?: { color: number; count: number; rise: boolean };
   /** Conifer treeline silhouette across the top band — the woodlands mark.
-   *  count ≈ density, band ≈ how far down the forest reaches (canopy feel). */
-  trees?: { color: number; count: number; band: number };
+   *  count ≈ density, band ≈ how far down the forest reaches (canopy feel).
+   *  style wraps the forest around the frame. 2026-11-11: operator picked
+   *  'frame' (variant A of 3 — regular side columns + bottom strip, most
+   *  subtle; review shots in git history + archive). ?woods= overrides for
+   *  debug. */
+  trees?: { color: number; count: number; band: number; style?: WoodsStyle };
   /** Vignette strength at the corners (0 = none). */
   vignette: number;
 }
@@ -209,54 +220,54 @@ export const THEMES: Record<number, LevelTheme> = {
   1: {
     bg: 0x131a33, fieldGlow: 0x27335c, path: 0x17213d, pathInner: 0x1b2748,
     stars: 40, motes: { color: 0xffc24b, count: 6, rise: false },
-    trees: { color: 0x0c1226, count: 26, band: 90 }, vignette: 0.12,
+    trees: { color: 0x0c1226, count: 26, band: 90, style: 'frame' }, vignette: 0.12,
   },
   2: {
     bg: 0x0c1428, fieldGlow: 0x1a2c52, path: 0x101c34, pathInner: 0x14213e,
     stars: 30, moon: { x: 122, y: 150, r: 26, alpha: 0.8 },
     motes: { color: 0x4fd8eb, count: 8, rise: false },
-    trees: { color: 0x081020, count: 34, band: 110 }, vignette: 0.2,
+    trees: { color: 0x081020, count: 34, band: 110, style: 'frame' }, vignette: 0.2,
   },
   3: {
     bg: 0x0f1a17, fieldGlow: 0x1d3a2c, path: 0x13221d, pathInner: 0x182a22,
     stars: 6, motes: { color: 0x9fe6a0, count: 10, rise: true },
-    trees: { color: 0x0a120f, count: 20, band: 70 }, vignette: 0.3,
+    trees: { color: 0x0a120f, count: 20, band: 70, style: 'frame' }, vignette: 0.3,
   },
   4: {
     bg: 0x11161d, fieldGlow: 0x232f3f, path: 0x151d26, pathInner: 0x1a2430,
     stars: 4, motes: { color: 0xb9c8d6, count: 8, rise: false },
-    trees: { color: 0x0c1117, count: 24, band: 100 }, vignette: 0.38,
+    trees: { color: 0x0c1117, count: 24, band: 100, style: 'frame' }, vignette: 0.38,
   },
   5: {
     bg: 0x0e1416, fieldGlow: 0x21343a, path: 0x121d20, pathInner: 0x172428,
     stars: 8, motes: { color: 0x9b8cff, count: 6, rise: false },
-    trees: { color: 0x091010, count: 40, band: 130 }, vignette: 0.34,
+    trees: { color: 0x091010, count: 40, band: 130, style: 'frame' }, vignette: 0.34,
   },
   6: {
     bg: 0x0b1614, fieldGlow: 0x1b3a30, path: 0x0f211c, pathInner: 0x132a23,
     stars: 12, motes: { color: 0x47e0a0, count: 12, rise: false },
-    trees: { color: 0x081311, count: 36, band: 120 }, vignette: 0.26,
+    trees: { color: 0x081311, count: 36, band: 120, style: 'frame' }, vignette: 0.26,
   },
   7: {
     bg: 0x101722, fieldGlow: 0x243248, path: 0x141d2c, pathInner: 0x192333,
     stars: 20, moon: { x: 596, y: 120, r: 18, alpha: 0.6 },
     motes: { color: 0x93a1c4, count: 6, rise: false },
-    trees: { color: 0x0a101a, count: 28, band: 95 }, vignette: 0.28,
+    trees: { color: 0x0a101a, count: 28, band: 95, style: 'frame' }, vignette: 0.28,
   },
   8: {
     bg: 0x0a0f14, fieldGlow: 0x18242f, path: 0x0e161e, pathInner: 0x121b25,
     stars: 2, motes: { color: 0x9b8cff, count: 8, rise: false },
-    trees: { color: 0x060a0e, count: 44, band: 150 }, vignette: 0.42,
+    trees: { color: 0x060a0e, count: 44, band: 150, style: 'frame' }, vignette: 0.42,
   },
   9: {
     bg: 0x160f14, fieldGlow: 0x3a2430, path: 0x1c1218, pathInner: 0x22161e,
     stars: 0, motes: { color: 0xffc24b, count: 10, rise: true },
-    trees: { color: 0x120a0e, count: 30, band: 90 }, vignette: 0.36,
+    trees: { color: 0x120a0e, count: 30, band: 90, style: 'frame' }, vignette: 0.36,
   },
   10: {
     bg: 0x1a0f0d, fieldGlow: 0x4a221a, path: 0x241412, pathInner: 0x2a1815,
     stars: 0, motes: { color: 0xff8b4b, count: 14, rise: true },
-    trees: { color: 0x150b09, count: 30, band: 90 }, vignette: 0.34,
+    trees: { color: 0x150b09, count: 30, band: 90, style: 'frame' }, vignette: 0.34,
   },
 };
 
@@ -695,6 +706,8 @@ const L6_WAVES: SpawnGroup[][] = [
 
 // Level 7 — The Old Paths: the long spiral. Walkers take the scenic route;
 // healers arrive in delegation — target discipline or grind forever.
+// 2026-11-11: 0-leak-ceiling pass (was min-leak 1 across 30 seeds — flag
+// from the remake session): w16 flyer 12→8 + healer 3→2 (two trims).
 const L7_WAVES: SpawnGroup[][] = [
   [{ kind: 'runner', count: 6, gap: 1.3, delay: 0 }],
   [
@@ -743,7 +756,7 @@ const L7_WAVES: SpawnGroup[][] = [
     { kind: 'swarm', count: 12, gap: 0.3, delay: 6 },
   ],
   [
-    { kind: 'flyer', count: 10, gap: 1.1, delay: 0 },
+    { kind: 'flyer', count: 9, gap: 1.1, delay: 0 },
     { kind: 'shielded', count: 8, gap: 1.7, delay: 5 },
   ],
   [
@@ -756,8 +769,8 @@ const L7_WAVES: SpawnGroup[][] = [
     { kind: 'healer', count: 2, gap: 3, delay: 8 },
   ],
   [
-    { kind: 'flyer', count: 12, gap: 1, delay: 0 },
-    { kind: 'healer', count: 3, gap: 3, delay: 4 },
+    { kind: 'flyer', count: 8, gap: 1, delay: 0 },
+    { kind: 'healer', count: 2, gap: 3, delay: 4 },
   ],
   [
     { kind: 'shielded', count: 10, gap: 1.4, delay: 0 },
@@ -782,7 +795,10 @@ const L7_WAVES: SpawnGroup[][] = [
 ];
 
 // Level 8 — The Silent Grove: shielded trains under flyers. Prism walls
-// answer armor; kilns answer the clumps the switchbacks make.
+// answer armor; kilns answer the clumps the staggered switchbacks make.
+// 2026-11-11: flyer waves trimmed one notch for the west-hollow rework
+// (lanes are longer diagonals; w12 10→9, w17 5→4, w22 6→5) — the flyer
+// lane exposure is the difficulty dial (DEV_NOTES §8).
 const L8_WAVES: SpawnGroup[][] = [
   [{ kind: 'runner', count: 7, gap: 1.2, delay: 0 }],
   [
@@ -819,11 +835,11 @@ const L8_WAVES: SpawnGroup[][] = [
     { kind: 'flyer', count: 5, gap: 1.3, delay: 5 },
   ],
   [
-    { kind: 'shielded', count: 7, gap: 1.5, delay: 0 },
-    { kind: 'shielded', count: 5, gap: 1.3, delay: 6 },
+    { kind: 'shielded', count: 8, gap: 1.5, delay: 0 },
+    { kind: 'shielded', count: 6, gap: 1.3, delay: 6 },
   ],
   [
-    { kind: 'flyer', count: 10, gap: 1.1, delay: 0 },
+    { kind: 'flyer', count: 9, gap: 1.1, delay: 0 },
     { kind: 'healer', count: 2, gap: 3, delay: 4 },
   ],
   [
@@ -837,15 +853,15 @@ const L8_WAVES: SpawnGroup[][] = [
   [
     { kind: 'flyer', count: 7, gap: 1, delay: 0 },
     { kind: 'healer', count: 2, gap: 3, delay: 4 },
-    { kind: 'swarm', count: 9, gap: 0.3, delay: 8 },
+    { kind: 'swarm', count: 11, gap: 0.3, delay: 8 },
   ],
   [
-    { kind: 'shielded', count: 8, gap: 1.4, delay: 0 },
+    { kind: 'shielded', count: 10, gap: 1.4, delay: 0 },
     { kind: 'healer', count: 2, gap: 3, delay: 6 },
   ],
   [
     { kind: 'swarm', count: 14, gap: 0.24, delay: 0 },
-    { kind: 'flyer', count: 5, gap: 1.2, delay: 6 },
+    { kind: 'flyer', count: 4, gap: 1.2, delay: 6 },
   ],
   [
     { kind: 'runner', count: 11, gap: 0.55, delay: 0 },
@@ -854,7 +870,7 @@ const L8_WAVES: SpawnGroup[][] = [
   ],
   [
     { kind: 'shielded', count: 8, gap: 1.3, delay: 0 },
-    { kind: 'swarm', count: 8, gap: 0.26, delay: 6 },
+    { kind: 'swarm', count: 10, gap: 0.26, delay: 6 },
   ],
   [
     { kind: 'flyer', count: 6, gap: 0.9, delay: 0 },
@@ -866,8 +882,8 @@ const L8_WAVES: SpawnGroup[][] = [
     { kind: 'runner', count: 8, gap: 0.7, delay: 9 },
   ],
   [
-    { kind: 'shielded', count: 8, gap: 1.2, delay: 0 },
-    { kind: 'flyer', count: 6, gap: 1, delay: 6 },
+    { kind: 'shielded', count: 9, gap: 1.2, delay: 0 },
+    { kind: 'flyer', count: 5, gap: 1, delay: 6 },
     { kind: 'healer', count: 3, gap: 2.8, delay: 9 },
   ],
 ];
@@ -1263,18 +1279,34 @@ export const LEVELS: LevelDef[] = [
     id: 8,
     name: 'The Silent Grove',
     map: {
+      // 2026-11-11 rework (operator picked variant C of 3): the old symmetric
+      // 3-pass ladder boxed the lantern in — legs passed 40px above it on both
+      // sides. Now: staggered switchbacks (four passes of different widths,
+      // two distinct left columns) ending in a clean vertical drop into the
+      // WEST HOLLOW — lantern (140,1000), no leg grazes it. 2560px (+4%,
+      // length kept as promised). Grove pair t4+t5 sits 120px apart mid-map.
+      // The old (480,1080) tile grazed the strip zone — the new lowest tile
+      // is (300,960), legal (y<1040, off-strip).
+      // 2026-11-11 (later): t12 (20,940) HOLLOW WATCH added — ON the left
+      // flyer lane (d≈63, ember chord ~270px), legal off the ground path,
+      // 113px from t11. The short left lane was the 0-leak blocker: only t11
+      // reached it (t10 ember 150 < 165 needed). t12 profiles 5% path / 73%
+      // fly — a lane specialist, not a filler. With the full-depth threestar
+      // doctrine this makes 0-leak attainable: min-leak 0, 8/30 perfect runs
+      // @30 seeds, waves untouched. 13 tiles.
       waypoints: [
-        { x: 360, y: -60 }, { x: 360, y: 240 }, { x: 180, y: 240 }, { x: 180, y: 480 },
-        { x: 540, y: 480 }, { x: 540, y: 720 }, { x: 180, y: 720 }, { x: 180, y: 960 },
-        { x: 540, y: 960 }, { x: 360, y: 1000 },
+        { x: 360, y: -60 }, { x: 360, y: 200 }, { x: 600, y: 200 }, { x: 600, y: 440 },
+        { x: 160, y: 440 }, { x: 160, y: 700 }, { x: 560, y: 700 }, { x: 560, y: 900 },
+        { x: 140, y: 900 }, { x: 140, y: 1000 },
       ],
       tiles: [
-        { x: 260, y: 120 }, { x: 60, y: 360 }, { x: 300, y: 360 },
-        { x: 420, y: 360 }, { x: 300, y: 600 }, { x: 480, y: 600 },
-        { x: 420, y: 840 }, { x: 300, y: 840 }, { x: 60, y: 840 }, { x: 660, y: 600 },
-        { x: 600, y: 360 }, { x: 480, y: 1080 },
+        { x: 300, y: 100 }, { x: 480, y: 320 }, { x: 300, y: 320 },
+        { x: 60, y: 560 }, { x: 300, y: 560 }, { x: 420, y: 560 },
+        { x: 660, y: 560 }, { x: 300, y: 780 }, { x: 480, y: 780 },
+        { x: 660, y: 820 }, { x: 300, y: 960 }, { x: 100, y: 860 },
+        { x: 20, y: 940 },
       ],
-      lantern: { x: 360, y: 1000 },
+      lantern: { x: 140, y: 1000 },
       flyerSpawns: [{ x: 760, y: 240 }, { x: -60, y: 720 }, { x: 360, y: -80 }],
     },
     waves: L8_WAVES,
@@ -1294,12 +1326,15 @@ export const LEVELS: LevelDef[] = [
         { x: 180, y: 480 }, { x: 600, y: 480 }, { x: 600, y: 660 }, { x: 180, y: 660 },
         { x: 180, y: 840 }, { x: 600, y: 840 }, { x: 600, y: 1000 }, { x: 360, y: 1000 },
       ],
+      // 2026-11-11: t12 (480,1120) removed — it overlapped the wave-strip /
+      // button zone (no build tiles y≳1080 in x 126-594, W4.0-3). It was the
+      // weakest tile anyway (5% path coverage); the bottom lane it watched is
+      // already covered by t11 (360,930). 13 → 12 tiles.
       tiles: [
         { x: 300, y: 210 }, { x: 100, y: 210 }, { x: 360, y: 390 },
         { x: 100, y: 390 }, { x: 240, y: 570 }, { x: 360, y: 570 },
         { x: 100, y: 570 }, { x: 680, y: 570 }, { x: 360, y: 750 },
         { x: 100, y: 750 }, { x: 680, y: 750 }, { x: 360, y: 930 },
-        { x: 480, y: 1120 },
       ],
       lantern: { x: 360, y: 1000 },
       flyerSpawns: [{ x: 760, y: 600 }, { x: -60, y: 400 }, { x: 360, y: -80 }],
