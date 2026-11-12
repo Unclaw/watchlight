@@ -5,7 +5,7 @@ Murk-creatures. Short, replayable runs; roguelite rune picks. Plays anywhere —
 tablet, desktop — and installs from the browser as an offline PWA. **Non-commercial** —
 an exploration of possibilities, free to play, nothing sold.
 
-**Status:** beta v0.8.3 — live on GitHub Pages · **Stack:** TypeScript (strict) · Vite ·
+**Status:** beta v0.8.4 — live on GitHub Pages · **Stack:** TypeScript (strict) · Vite ·
 Phaser 3 · PWA (a native wrap via Capacitor stays optional).
 **Languages:** English + Русский — auto-detected from the device, switchable on the
 menu (bottom row), overridable per URL with `?lang=ru|en`. All strings live in `src/i18n.ts`.
@@ -126,9 +126,11 @@ npx cap add ios && npx cap sync && npx cap open ios
 
 ## Status / roadmap
 
-**Beta, live on GitHub Pages** — v0.8.3: the full **Woodlands arc** with the
+**Beta, live on GitHub Pages** — v0.8.4: the full **Woodlands arc** with the
 Root & Sprout finale; balance is sim-validated (30-seed policy sweeps) and
 level reworks are 0-leak-probed (L7/L8/L9 all have attainable perfect runs).
+Static map art bakes once per run — frames are 30–37% lighter on weak GPUs
+(profiling was prompted by on-device FPS drops and healer-wave overheating).
 
 Shipped so far:
 
@@ -144,8 +146,10 @@ Shipped so far:
 - Flyer-lane prep preview + first-time mechanic tips; Endless Night
   (unlocks after L10), UTC-seeded Daily Run (full-bestiary map),
   prep/wave sell-refund economy, screen wake lock
+- Performance: static map art (sky/trees/moon/path/vignette) baked once per
+  run into two textures — per-frame Graphics cost ~58% → 2 quads
 - EN + RU localization; PWA shell (offline, installable); 35-check CDP e2e
-  suite + headless balance bot + policy simulator
+  suite + headless balance bot + policy simulator + weak-GPU stress profiler
 
 Next, in order:
 

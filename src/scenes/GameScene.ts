@@ -76,6 +76,30 @@ interface Tile {
   tower: Tower | null;
 }
 
+/** Radial glow drawn as ring circles — the vector equivalent of the
+ * 'glow' texture (BootScene glowRings, 6 rings + opaque 18% core) at sprite
+ * alpha `mult`. Ring alphas are solved recursively so the CUMULATIVE
+ * sequential blend equals the texture's cumulative × mult exactly at every
+ * band (naive per-ring ×mult overshoots inner bands — blending isn't
+ * linear). Used by the static bake; the core is filled separately where an
+ * additive-equivalent colour is needed. */
+function glowRingRecipe(g: Phaser.GameObjects.Graphics, cx: number, cy: number, R: number, color: number, mult: number): void {
+  const N = 6;
+  const a: number[] = [];
+  for (let i = 1; i <= N; i++) a[i] = 0.05 * ((N - i + 1) / N) + 0.03; // texture ring alphas
+  // cumulative texture alpha inside band k (rings k..N all cover it)
+  const T: number[] = [];
+  T[N + 1] = 0;
+  for (let k = N; k >= 1; k--) T[k] = 1 - (1 - T[k + 1]) * (1 - a[k]);
+  const s: number[] = [];
+  for (let k = N + 1; k >= 1; k--) s[k] = mult * T[k]; // target cumulative
+  for (let k = N; k >= 1; k--) {
+    const c = 1 - (1 - s[k]) / (1 - s[k + 1]); // solved per-ring alpha
+    g.fillStyle(color, c);
+    g.fillCircle(cx, cy, (R * k) / N);
+  }
+}
+
 export class GameScene extends Phaser.Scene {
   // --- run state ---
   mode: RunMode = 'level';
@@ -136,6 +160,20 @@ export class GameScene extends Phaser.Scene {
   /** Prep-only dashed preview of flyer lanes (visible when the NEXT wave
    * has flyers — the wave strip says what, this says where). */
   private flyerLanes?: Phaser.GameObjects.Graphics;
+  /** Static per-run GRAPHICS collected at map draw, composited ONCE into
+   * an opaque baked texture by bakeStatics() (perf 2026-11-11: the static
+   * stack was ~58% of every frame on weak GPUs; Phaser re-tessellates and
+   * re-blends Graphics every frame). Images/ADD glows CANNOT go through
+   * this path — sprite-batched draws into a RenderTexture corrupt its
+   * alpha (verified by probe, Phaser 3.90) — so only Graphics is baked;
+   * the few glow/marker IMAGES stay live above the bake. Order matters:
+   * creation order IS the draw order inside the bake. */
+  private statics: Phaser.GameObjects.GameObject[] = [];
+  /** Vignette corners — baked as black ring-Graphics into a separate
+   * TRANSPARENT texture at depth 7 (black is alpha-math-exact there;
+   * they must layer above tiles/towers, so they can't join the opaque
+   * background bake). */
+  private vignetteStatics: Phaser.GameObjects.GameObject[] = [];
   runeButton?: RuneButton; // press-and-hold rune peek (smoke reads it)
   activeRuneOverlay?: RuneOverlay; // smoke contract: iconOrderValid()
   private fx!: Fx;
@@ -180,6 +218,8 @@ export class GameScene extends Phaser.Scene {
     this.lanternGlow = undefined;
     this.lanternTween = undefined;
     this.flyerLanes = undefined;
+    this.statics = [];
+    this.vignetteStatics = [];
     this.runeButton = undefined;
     this.activeRuneOverlay = undefined;
     if (this.hpBars) this.hpBars.destroy(); // may survive from a prior create()
@@ -282,16 +322,30 @@ export class GameScene extends Phaser.Scene {
   private drawMap(): void {
     const theme = this.levelTheme();
     this.cameras.main.setBackgroundColor(theme.bg);
+
+    // soft radial lift behind the playfield — baked FIRST (directly over the
+    // theme bg) as ring circles + additive-equivalent core, the same recipe
+    // the 'glow' texture is generated from. Drawn under the sky/trees/path
+    // (instead of additively over them) so nothing gets eaten; the huge ADD
+    // quad leaves the per-frame render entirely (see bakeStatics).
+    const lift = this.add.graphics();
+    const R = (128 * 2) / 2 * 7; // glow texture half-size (128·S=2) × map scale 7
+    const LCX = GAME_W / 2, LCY = 560;
+    glowRingRecipe(lift, LCX, LCY, R, theme.fieldGlow, 0.5);
+    // the texture's opaque 18% core, in ADD-equivalent form over the bg:
+    // bg + fieldGlow×0.5 (sprite alpha), filled opaque
+    {
+      const bg = theme.bg;
+      const fg = theme.fieldGlow;
+      const mix = (sh: number) => Math.min(255, Math.round(((bg >> sh) & 0xff) + ((fg >> sh) & 0xff) * 0.5));
+      lift.fillStyle(Phaser.Display.Color.GetColor(mix(16), mix(8), mix(0)), 1);
+      lift.fillCircle(LCX, LCY, R * 0.18);
+    }
+    this.statics.push(lift);
+
     this.drawAmbience(theme);
     const g = this.add.graphics().setDepth(1);
-
-    // soft radial lift behind the playfield
-    this.add
-      .image(GAME_W / 2, 560, 'glow')
-      .setScale(7)
-      .setTint(theme.fieldGlow)
-      .setAlpha(0.5)
-      .setBlendMode(Phaser.BlendModes.ADD);
+    this.statics.push(g);
 
     // path: wide dark band, thin luminous centre, chevrons for direction
     const wps = this.level.map.waypoints;
@@ -310,6 +364,7 @@ export class GameScene extends Phaser.Scene {
       const p2 = this.path.posAt(d + 14);
       const ang = Math.atan2(p2.y - p.y, p2.x - p.x);
       const chev = this.add.graphics().setDepth(2);
+      this.statics.push(chev);
       chev.fillStyle(C.muted, 0.28);
       chev.beginPath();
       chev.moveTo(p.x - Math.cos(ang) * 7 - Math.sin(ang) * 7, p.y - Math.sin(ang) * 7 + Math.cos(ang) * 7);
@@ -319,7 +374,7 @@ export class GameScene extends Phaser.Scene {
       chev.fillPath();
     }
 
-    // murk entrance markers
+    // murk entrance markers (images — stay live; see bakeStatics)
     this.add.image(wps[0].x, 30, 'glow').setScale(0.5).setTint(0xff5f7a).setAlpha(0.5).setBlendMode(Phaser.BlendModes.ADD).setDepth(2);
     for (const f of this.level.map.flyerSpawns) {
       const x = Phaser.Math.Clamp(f.x, 26, GAME_W - 26);
@@ -346,6 +401,8 @@ export class GameScene extends Phaser.Scene {
         .map((id) => RUNES.find((r) => r.id === id))
         .filter((r): r is RuneDef => Boolean(r)),
     );
+    // statics are all collected by now — composite them once (see bakeStatics)
+    this.bakeStatics();
   }
 
   /** Ambience theme: per campaign level; daily/endless play the bestiary map's theme. */
@@ -359,6 +416,7 @@ export class GameScene extends Phaser.Scene {
     if (theme.stars > 0) {
       const rng = new Rng(this.level.id * 997 + 17);
       const starG = this.add.graphics().setDepth(0);
+      this.statics.push(starG);
       for (let i = 0; i < theme.stars; i++) {
         starG.fillStyle(0xeef2ff, rng.float(0.12, 0.55));
         starG.fillCircle(rng.float(14, GAME_W - 14), rng.float(30, 760), rng.float(0.8, 1.9));
@@ -375,6 +433,7 @@ export class GameScene extends Phaser.Scene {
       const style = DEBUG.woods ?? theme.trees.style ?? null;
       const rng = new Rng(this.level.id * 577 + 3);
       const tg = this.add.graphics().setDepth(0);
+      this.statics.push(tg);
       const conifer = (x: number, baseY: number, h: number, a: number) => {
         const w = h * rng.float(0.42, 0.58);
         tg.fillStyle(color, a);
@@ -436,7 +495,8 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    // pale moon disc with a soft halo and a subtle bite
+    // pale moon disc with a soft halo and a subtle bite (the ADD halo is an
+    // image — stays live; only the Graphics disc bakes)
     if (theme.moon) {
       const m = theme.moon;
       this.add
@@ -447,6 +507,7 @@ export class GameScene extends Phaser.Scene {
         .setBlendMode(Phaser.BlendModes.ADD)
         .setDepth(0);
       const disc = this.add.graphics().setDepth(0);
+      this.statics.push(disc);
       disc.fillStyle(0xdde6ff, m.alpha);
       disc.fillCircle(m.x, m.y, m.r);
       disc.fillStyle(theme.bg, m.alpha * 0.35);
@@ -485,17 +546,53 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    // vignette: dark glow sprites hugging the four corners (normal blend)
+    // vignette: the 'glow' ring recipe in black at each corner — Graphics
+    // only, baked into the transparent depth-7 texture (see bakeStatics)
     if (theme.vignette > 0) {
       const corners: [number, number][] = [[0, 0], [GAME_W, 0], [0, GAME_H], [GAME_W, GAME_H]];
       for (const [x, y] of corners) {
-        this.add
-          .image(x, y, 'glow')
-          .setScale(6)
-          .setTint(0x000000)
-          .setAlpha(theme.vignette)
-          .setDepth(7);
+        const vg = this.add.graphics();
+        glowRingRecipe(vg, x, y, (128 * 2) / 2 * 6, 0x000000, theme.vignette);
+        vg.fillStyle(0x000000, theme.vignette); // the texture's opaque core
+        vg.fillCircle(x, y, (128 * 2) / 2 * 6 * 0.18);
+        this.vignetteStatics.push(vg);
       }
+    }
+  }
+
+  /** Composite the collected static GRAPHICS once into baked textures,
+   * then destroy the originals: ~25 Graphics objects that Phaser
+   * re-tessellated and re-blended EVERY frame become two quads (opaque
+   * background at depth −1, black vignette at depth 7).
+   *
+   * Probe-verified rules on Phaser 3.90 (see bake-shot diffs):
+   *  - The background RT is pre-filled with the bg colour, so every
+   *    normal-blend Graphics draw composites EXACTLY as it did against the
+   *    camera background.
+   *  - Sprite-batched draws (Images: the ADD glows, flyer markers) corrupt
+   *    the RT's alpha channel, and any ADD draw kills the whole RT — those
+   *    few objects stay live.
+   *  - Black content in a TRANSPARENT RT is alpha-exact (rgb 0 survives the
+   *    double application), so the vignette corners bake as ring-Graphics.
+   *
+   * Deliberately NOT collected: lantern glow pulse, ambience motes, flyer
+   * lanes (prep toggle), tiles, aura rings. */
+  private bakeStatics(): void {
+    if (this.statics.length) {
+      const theme = this.levelTheme();
+      const rt = this.add.renderTexture(0, 0, GAME_W, GAME_H).setOrigin(0).setDepth(-1);
+      rt.fill(theme.bg, 1);
+      for (const o of this.statics) rt.draw(o);
+      for (const o of this.statics) o.destroy();
+      this.statics = [];
+    }
+    if (this.vignetteStatics.length) {
+      // black content in a transparent RT: out = below×(1−a) — identical to
+      // the live black images it replaces, at the same depth
+      const rt = this.add.renderTexture(0, 0, GAME_W, GAME_H).setOrigin(0).setDepth(7);
+      for (const o of this.vignetteStatics) rt.draw(o);
+      for (const o of this.vignetteStatics) o.destroy();
+      this.vignetteStatics = [];
     }
   }
 
