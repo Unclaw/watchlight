@@ -1,6 +1,9 @@
 // Procedural WebAudio engine — zero audio assets.
 // iOS rules honoured (research §5.1): AudioContext is created/resumed inside a
 // real gesture handler, simultaneous voices are capped, every cue is throttled.
+// Background music: per-biome procedural tracks (config MUSIC), scheduler below.
+import { MUSIC, MusicDef } from './config';
+
 type Wave = OscillatorType;
 
 interface ToneOpts {
@@ -27,6 +30,20 @@ class AudioSys {
   private auraAlt = false; // halo growl: alternate the two tonalities per pulse
   muted = false;
   private ambientOn = false;
+  // --- background music (per-biome tracks from config MUSIC) ---
+  /** Current track id. Default = the operator-locked woodlands pick; menus
+   *  and levels call setMusic() from their biome, ?bg= overrides it. */
+  track = 'woodlands';
+  private def: MusicDef | null = null;
+  private fadeToken = 0;
+  // --- scheduler state (audio-clock lookahead pattern) ---
+  private schedTimer: ReturnType<typeof setInterval> | null = null;
+  private schedVoices = 0; // separate lane: never starves the 14 combat voices
+  private cursor = 0; // next grid time on the audio clock (s)
+  private gridIdx = 0; // musical position: 8th index within the 4-bar loop
+  private seed = 1; // LCG for ±humanization (stable across runs)
+  private amb: GainNode | null = null;
+  private sendIn: GainNode | null = null;
 
   constructor() {
     // Android audio-path hygiene (phantom "electrical distortion" report
@@ -187,25 +204,179 @@ class AudioSys {
     }
   }
 
-  /** Soft two-oscillator pad + slow noise shimmer, barely audible. */
+  /** Background music entry — the per-biome track (config MUSIC). */
   private startAmbient(): void {
     if (this.ambientOn || !this.ctx || !this.master) return;
-    this.ambientOn = true;
-    const ctx = this.ctx;
-    const g = ctx.createGain();
-    g.gain.value = 0;
-    g.gain.setTargetAtTime(0.05, ctx.currentTime, 3);
-    const o1 = ctx.createOscillator(); o1.type = 'sine'; o1.frequency.value = 55;
-    const o2 = ctx.createOscillator(); o2.type = 'sine'; o2.frequency.value = 55.6;
-    const o3 = ctx.createOscillator(); o3.type = 'triangle'; o3.frequency.value = 110.3;
-    const g3 = ctx.createGain(); g3.gain.value = 0.35;
-    const lfo = ctx.createOscillator(); lfo.frequency.value = 0.07;
-    const lfoG = ctx.createGain(); lfoG.gain.value = 0.02;
-    lfo.connect(lfoG); lfoG.connect(g.gain);
-    o1.connect(g); o2.connect(g); o3.connect(g3); g3.connect(g);
-    g.connect(this.master);
-    o1.start(); o2.start(); o3.start(); lfo.start();
+    this.ambientOn = true; // once-only guard lives HERE alone (see MEMORY gotcha)
+    this.startMusic();
   }
+
+  /** Select the background track (a config MUSIC key). Called before unlock:
+   *  just records. While playing: crossfades to the new def. Same id: no-op. */
+  setMusic(id: string): void {
+    if (id === this.track) return;
+    this.track = id;
+    if (!this.ambientOn || !this.ctx || !this.amb) return;
+    // crossfade: fade the bus out, then rebuild the graph on the new def
+    const token = ++this.fadeToken;
+    this.amb.gain.setTargetAtTime(0, this.ctx.currentTime, 0.25);
+    setTimeout(() => {
+      if (token !== this.fadeToken || !this.ctx) return;
+      try { this.amb?.disconnect(); } catch { /* already gone */ }
+      this.stopScheduler();
+      this.startMusic();
+    }, 750);
+  }
+
+  // ==================== background music (per-biome, procedural) ====================
+  // Zero assets. A lookahead scheduler (tick every 300ms, plan 1.2s ahead on
+  // the AUDIO clock — "two clocks" pattern) plays the track's 4-bar loop from
+  // config MUSIC: soft triangle chords on the downbeat + a sparse sine
+  // melody on an 8th-note grid, both feeding one shared echo bus (the "air").
+  // Suspend-safe for free: ctx.currentTime freezes while hidden, so the
+  // cursor stops; on resume it fast-forwards whole grid steps, in phase.
+  // Muted = nothing is scheduled. Ambient voices live on their OWN lane
+  // (cap 22) so music can never starve the 14-voice combat pool. Melody
+  // notes stay >= 440Hz and chords are lowpassed below that — no pitched
+  // interference with combat cues (kill pops sit at 60-300Hz). No noise
+  // percussion: white-noise hats crackled on device (beat audition 2026-11-12)
+  // — if percussion ever returns, make it tonal, not a noise burst.
+
+  private startMusic(): void {
+    const ctx = this.ctx;
+    const master = this.master;
+    if (!ctx || !master) return;
+    this.stopScheduler();
+    const def = MUSIC[this.track] ?? MUSIC.woodlands;
+    // ambient bus (fades in) + shared echo send = the "air"
+    const amb = ctx.createGain();
+    amb.gain.value = 0;
+    amb.gain.setTargetAtTime(def.busLevel, ctx.currentTime, 2.5);
+    amb.connect(master);
+    const sendIn = ctx.createGain();
+    const delay = ctx.createDelay(2);
+    const fb = ctx.createGain();
+    const tone = ctx.createBiquadFilter(); // keeps echo tails dark = lo-fi
+    tone.type = 'lowpass';
+    tone.frequency.value = 2400;
+    const wet = ctx.createGain();
+    delay.delayTime.value = def.echo[0];
+    fb.gain.value = def.echo[1];
+    wet.gain.value = def.echo[2];
+    sendIn.connect(delay);
+    delay.connect(tone);
+    tone.connect(fb); fb.connect(delay); // feedback loop
+    tone.connect(wet); wet.connect(amb);
+    this.amb = amb;
+    this.sendIn = sendIn;
+    this.def = def;
+    this.seed = 20261112;
+    this.cursor = ctx.currentTime + 0.2;
+    this.gridIdx = 0;
+    this.schedTimer = setInterval(() => this.tickMusic(), 300);
+  }
+
+  private stopScheduler(): void {
+    if (this.schedTimer !== null) {
+      clearInterval(this.schedTimer);
+      this.schedTimer = null;
+    }
+  }
+
+  private tickMusic(): void {
+    if (!this.ctx || this.muted || !this.def) return;
+    // after a long suspend, currentTime jumps ahead of the cursor: fast-
+    // forward whole grid steps (no note pileup), music resumes in phase
+    if (this.cursor < this.ctx.currentTime - 0.05) {
+      const step = (60 / this.def.bpm) / 2;
+      const missed = Math.floor((this.ctx.currentTime - this.cursor) / step);
+      this.cursor += missed * step;
+      this.gridIdx += missed;
+    }
+    const horizon = this.ctx.currentTime + 1.2;
+    let guard = 0;
+    while (this.cursor < horizon && guard++ < 40) this.planTrack();
+  }
+
+  private rnd(): number {
+    this.seed = (this.seed * 1664525 + 1013904223) >>> 0;
+    return this.seed / 0xffffffff;
+  }
+
+  /** One scheduled ambient voice: soft attack, dark filter, optional echo
+   *  send. Own voice lane with its own cap — combat cues always win. */
+  private ambVoice(o: { freq: number; to?: number; dur: number; vol: number; at: number;
+    type?: Wave; attack?: number; filter?: number; send?: number }): void {
+    const ctx = this.ctx;
+    if (!ctx || !this.amb || this.schedVoices > 22) return;
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type = o.type ?? 'sine';
+    osc.frequency.setValueAtTime(o.freq, o.at);
+    if (o.to !== undefined) osc.frequency.exponentialRampToValueAtTime(Math.max(1, o.to), o.at + o.dur);
+    const a = o.attack ?? 0.02;
+    const rel = Math.max(0.12, Math.min(1.2, o.dur * 0.4));
+    g.gain.setValueAtTime(0.0001, o.at);
+    g.gain.linearRampToValueAtTime(o.vol, o.at + a);
+    g.gain.setValueAtTime(o.vol, o.at + Math.max(a + 0.01, o.dur - rel));
+    g.gain.exponentialRampToValueAtTime(0.0001, o.at + o.dur);
+    let node: AudioNode = g;
+    osc.connect(g);
+    if (o.filter) {
+      const f = ctx.createBiquadFilter();
+      f.type = 'lowpass'; f.frequency.value = o.filter;
+      g.connect(f); node = f;
+    }
+    node.connect(this.amb);
+    if (o.send && this.sendIn) {
+      const s = ctx.createGain();
+      s.gain.value = o.send;
+      node.connect(s); s.connect(this.sendIn);
+      // the send gain node is per-voice; release it with the note
+      osc.onended = () => { this.schedVoices--; s.disconnect(); };
+    } else {
+      osc.onended = () => { this.schedVoices--; };
+    }
+    this.schedVoices++;
+    osc.start(o.at);
+    osc.stop(o.at + o.dur + 0.05);
+  }
+
+  // ---- the grid: one chord per bar + melody hits on an 8th-note grid ----
+  private planTrack(): void {
+    const def = this.def as MusicDef;
+    const beat = 60 / def.bpm, e8 = beat / 2, bar = beat * 4;
+    const slot = this.gridIdx % 32; // 8th index within the 4-bar loop
+    const barIdx = Math.floor(slot / 8);
+    const at = this.cursor;
+    // chord lands on slot 0 of each bar (gentle strum)
+    if (slot % 8 === 0) {
+      def.chords[barIdx].forEach((n, i) => {
+        this.ambVoice({ freq: noteHz(n), dur: bar * 0.92, vol: def.chordVol, at: at + i * 0.03,
+          type: 'triangle', attack: def.chordAttack, filter: def.chordFilter, send: def.chordSend });
+      });
+    }
+    // melody: pattern from the def; every Nth loop thins one note out —
+    // beats repetition without drifting from the composed material
+    for (const [mb, ms, mn, md] of def.melody) {
+      if (mb !== barIdx || ms !== slot) continue;
+      if (this.gridIdx % (32 * def.thinEvery) >= 32 && (mb * 8 + ms) % 11 === 3) continue;
+      const hum = 1 + (this.rnd() - 0.5) * 0.004; // ±4 cents
+      this.ambVoice({ freq: noteHz(mn) * hum, dur: md * e8, vol: def.melVol, at: at + (this.rnd() - 0.5) * 0.02,
+        type: 'sine', attack: def.melAttack, send: def.melSend });
+    }
+    this.cursor += e8;
+    this.gridIdx++;
+  }
+}
+
+// note name -> Hz ('F3', 'Bb2', 'C#4'); A4 = 440
+const SEMI: Record<string, number> = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+function noteHz(n: string): number {
+  const m = /^([A-G])(#|b)?(\d)$/.exec(n);
+  if (!m) return 440;
+  const midi = (Number(m[3]) + 1) * 12 + SEMI[m[1]] + (m[2] === '#' ? 1 : m[2] === 'b' ? -1 : 0);
+  return 440 * Math.pow(2, (midi - 69) / 12);
 }
 
 export const audio = new AudioSys();

@@ -5,7 +5,7 @@ Murk-creatures. Short, replayable runs; roguelite rune picks. Plays anywhere —
 tablet, desktop — and installs from the browser as an offline PWA. **Non-commercial** —
 an exploration of possibilities, free to play, nothing sold.
 
-**Status:** beta v0.8.4 — live on GitHub Pages · **Stack:** TypeScript (strict) · Vite ·
+**Status:** beta v0.8.5 — live on GitHub Pages · **Stack:** TypeScript (strict) · Vite ·
 Phaser 3 · PWA (a native wrap via Capacitor stays optional).
 **Languages:** English + Русский — auto-detected from the device, switchable on the
 menu (bottom row), overridable per URL with `?lang=ru|en`. All strings live in `src/i18n.ts`.
@@ -55,11 +55,13 @@ worker caches the shell; home-screen PWA storage is ITP-exempt on iOS).
 src/
   main.ts            entry: Phaser config (FIT scale, 60fps cap), audio unlock, SW
   config.ts          ALL game data: 10 levels (maps/waves/rosters/themes),
-                     5 towers, 8 enemy families, 16 runes, endless generator
+                     5 towers, 8 enemy families, 16 runes, endless generator,
+                     per-biome music defs (MUSIC)
   theme.ts           palette (single visual language everywhere)
   i18n.ts            every player string: EN source of truth + full RU localization
   rng.ts             seeded mulberry32 (deterministic daily runs)
-  audio.ts           procedural WebAudio: 14-voice pool, per-cue throttling, ambient pad
+  audio.ts           procedural WebAudio: 14-voice pool, per-cue throttling,
+                     per-biome background music (procedural lo-fi loops)
   runes.ts           rune effect table: one modifier fn per rune (stat/flag/queries)
   save.ts            localStorage persistence
   wakeLock.ts        Screen Wake Lock while the game is visible
@@ -148,6 +150,9 @@ Shipped so far:
   prep/wave sell-refund economy, screen wake lock
 - Performance: static map art (sky/trees/moon/path/vignette) baked once per
   run into two textures — per-frame Graphics cost ~58% → 2 quads
+- Procedural **lo-fi soundtrack** — the per-biome music engine (one MusicDef
+  per biome in config; woodlands track locked by audition, Deepmarsh/Ashen
+  drafts previewable via `?bg=`)
 - EN + RU localization; PWA shell (offline, installable); 35-check CDP e2e
   suite + headless balance bot + policy simulator + weak-GPU stress profiler
 

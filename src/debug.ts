@@ -22,6 +22,8 @@ export const DEBUG = {
   lang: (params.get('lang') as 'en' | 'ru' | null) ?? undefined,
   /** Woods-overlay style override (frame | encroach | surround) — decor review. */
   woods: params.get('woods') as 'frame' | 'encroach' | 'surround' | null,
+  /** Background-music track preview: woodlands | deepmarsh | ashen (MUSIC key). */
+  bg: params.get('bg') as 'woodlands' | 'deepmarsh' | 'ashen' | null,
 } as const;
 
 /** Mutable holder for one-shot debug behaviours (restart fires once). */

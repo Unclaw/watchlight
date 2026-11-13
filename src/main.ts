@@ -52,6 +52,7 @@ const game = new Phaser.Game({
 
 // restore mute preference + unlock audio on the very first gesture anywhere
 audio.setMuted(loadSave().mute);
+if (DEBUG.bg) audio.setMusic(DEBUG.bg); // biome-music track preview (?bg=)
 window.addEventListener(
   'pointerdown',
   () => audio.unlock(),

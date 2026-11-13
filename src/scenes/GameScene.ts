@@ -5,7 +5,7 @@ import {
   C, CSS, FONT, ENEMY_COLOR,
 } from '../theme';
 import {
-  BESTIARY_LEVEL, EnemyKind, GAME_H, GAME_W, LEVELS, LevelDef, PATH_WIDTH, PathIndex,
+  BESTIARY_LEVEL, BIOME_MUSIC, EnemyKind, GAME_H, GAME_W, LEVELS, LevelDef, PATH_WIDTH, PathIndex,
   COMBAT, RUNES, RuneDef, SpawnGroup, TowerKind, LevelTheme, THEMES,
   makePath, waveBonus, waveGroups, BOSS_LIKES,
 } from '../config';
@@ -188,6 +188,8 @@ export class GameScene extends Phaser.Scene {
     this.levelId = data.levelId ?? 1;
     // daily + endless play the full-bestiary map (flagged in config, not by index)
     this.level = this.mode === 'level' ? (LEVELS[this.levelId - 1] ?? LEVELS[0]) : BESTIARY_LEVEL;
+    // biome soundtrack (same track = no-op; future biomes crossfade on entry)
+    audio.setMusic(BIOME_MUSIC[this.level.biome ?? 'woodlands']);
     this.path = makePath(this.level.map.waypoints);
     // one master seed, forked per concern: daily runs stay reproducible even
     // if a consumer is added/removed in an unrelated stream

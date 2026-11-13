@@ -44,6 +44,7 @@ export class MenuScene extends Phaser.Scene {
   }
 
   create(): void {
+    audio.setMusic('woodlands'); // biome hub sits on the woodlands track
     const { width, height } = this.scale;
     const cx = width / 2;
     this.expanded = false;

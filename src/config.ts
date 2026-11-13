@@ -282,6 +282,8 @@ export interface SpawnGroup {
 export interface LevelDef {
   id: number;
   name: string;
+  /** Biome this level belongs to (drives background music; default woodlands). */
+  biome?: 'woodlands' | 'deepmarsh' | 'ashen';
   map: MapData;
   /** Handcrafted wave table; length = the level's wave count. */
   waves: SpawnGroup[][];
@@ -1179,7 +1181,7 @@ export const LEVELS: LevelDef[] = [
         { x: 300, y: 260 }, { x: 680, y: 260 }, { x: 60, y: 260 },
         { x: 300, y: 530 }, { x: 680, y: 530 }, { x: 60, y: 530 },
         { x: 300, y: 790 }, { x: 440, y: 790 }, { x: 680, y: 790 },
-        { x: 240, y: 960 }, { x: 520, y: 960 }, { x: 600, y: 1030 },
+        { x: 240, y: 960 }, { x: 520, y: 1010 }, { x: 600, y: 1030 },
       ],
       lantern: { x: 360, y: 1000 },
       flyerSpawns: [{ x: 760, y: 240 }, { x: -60, y: 600 }, { x: 760, y: 900 }],
@@ -1459,7 +1461,7 @@ export const RUNES: RuneDef[] = [
   { id: 'wideLens', name: 'Wide Lens', desc: 'Prism beams are 45% wider, catching whole columns.', accent: 0x4fd8eb, glyph: 'eye', tower: 'prism', effect: { kind: 'stat', stat: 'beamWidth', mult: 1.45 } },
   { id: 'powderKeg', name: 'Powder Keg', desc: 'Kiln damage +30%.', accent: 0xff8b4b, glyph: 'kiln', tower: 'kiln', effect: { kind: 'stat', stat: 'kilnDmg', mult: 1.3 } },
   { id: 'deepRoots', name: 'Deep Roots', desc: 'Wisp Grove reach +30%.', accent: 0x47e0a0, glyph: 'grove', tower: 'grove', effect: { kind: 'stat', stat: 'groveRange', mult: 1.3 } },
-  { id: 'oldGrowth', name: 'Old Growth', desc: 'Wisp Grove empower is 50% stronger.', accent: 0x9b8cff, glyph: 'sparkle', tower: 'grove', effect: { kind: 'stat', stat: 'groveGain', mult: 1.5 } },
+  { id: 'oldGrowth', name: 'Old Growth', desc: 'Wisp Grove empower is 50% stronger.', accent: 0x47e0a0, glyph: 'sparkle', tower: 'grove', effect: { kind: 'stat', stat: 'groveGain', mult: 1.5 } },
 ];
 
 // ---------- Combat tuning ----------
@@ -1508,3 +1510,107 @@ export const ECONOMY = {
 export function waveBonus(wave: number): number {
   return 12 + 4 * wave;
 }
+
+// ---------- Background music (per-biome, procedural — see src/audio.ts) ----------
+// One MusicDef per biome track; the scheduler plays chords + melody on an
+// 8th-note grid with a shared echo bus. Note names ('F3', 'C#4') are parsed
+// to Hz in audio.ts. Melody notes stay >= 440Hz so they never mask combat
+// cues; chords are lowpassed triangles below that.
+export interface MusicDef {
+  bpm: number;
+  /** One chord per bar (4 bars/loop), voiced low→high. */
+  chords: string[][];
+  /** Chord voice (lowpassed triangle in every track so far). */
+  chordVol: number;
+  chordAttack: number;
+  chordFilter: number;
+  chordSend: number;
+  /** Melody: [bar, eighth-slot, note, duration in 8ths]. */
+  melody: [number, number, string, number][];
+  melVol: number;
+  melAttack: number;
+  melSend: number;
+  /** Shared echo bus: [delayTime s, feedback, wet]. */
+  echo: [number, number, number];
+  /** Ambient bus level. */
+  busLevel: number;
+  /** Every Nth loop the melody thins one note (slot%11===3) — beats repetition. */
+  thinEvery: number;
+}
+
+// woodlands — the operator-locked pick (auditioned 2026-11-12 as "descent"):
+// Fmaj7 → Em7 → Dm7 → Cmaj7 stepping down at 66 BPM, sparse sine melody
+// floating above. Values transcribed byte-identical from the auditioned code.
+export const MUSIC: Record<string, MusicDef> = {
+  woodlands: {
+    bpm: 66,
+    chords: [
+      ['F3', 'A3', 'C4', 'E4'], // Fmaj7
+      ['E3', 'G3', 'B3', 'D4'], // Em7
+      ['D3', 'F3', 'A3', 'C4'], // Dm7
+      ['C3', 'E3', 'G3', 'B3'], // Cmaj7
+    ],
+    chordVol: 0.021, chordAttack: 0.45, chordFilter: 760, chordSend: 0.35,
+    melody: [
+      [0, 2.5, 'A5', 2], [0, 5.0, 'E5', 1.5], [0, 7.0, 'C5', 1],
+      [1, 0.5, 'G5', 1.5], [1, 3.0, 'D5', 1.5], [1, 6.0, 'B4', 2],
+      [2, 1.5, 'F5', 1.5], [2, 4.0, 'A5', 1], [2, 6.5, 'E5', 2],
+      [3, 0.0, 'E5', 1], [3, 3.5, 'G5', 1.5], [3, 6.0, 'C5', 2],
+    ],
+    melVol: 0.04, melAttack: 0.03, melSend: 0.5,
+    echo: [0.34, 0.32, 0.5],
+    busLevel: 0.8,
+    thinEvery: 2,
+  },
+  // deepmarsh — DRAFT (compose properly during the Deepmarsh session): murky,
+  // slower Dm9 → Bbmaj7 → Fadd9 → Am7 in a darker, lower register.
+  deepmarsh: {
+    bpm: 60,
+    chords: [
+      ['D3', 'F3', 'C4', 'E4'], // Dm9 (no A — open voicing)
+      ['Bb2', 'D3', 'F3', 'A3'], // Bbmaj7
+      ['F3', 'A3', 'C4', 'G4'], // Fadd9
+      ['A2', 'E3', 'G3', 'C4'], // Am7
+    ],
+    chordVol: 0.02, chordAttack: 0.55, chordFilter: 640, chordSend: 0.38,
+    melody: [
+      [0, 1.5, 'F5', 2], [0, 5.0, 'D5', 1.5],
+      [1, 0.0, 'C5', 1], [1, 3.5, 'F5', 1.5], [1, 6.5, 'A5', 1.5],
+      [2, 2.0, 'G5', 1.5], [2, 5.5, 'E5', 1.5],
+      [3, 1.0, 'D5', 1.5], [3, 4.5, 'C5', 1], [3, 6.5, 'A4', 2],
+    ],
+    melVol: 0.038, melAttack: 0.04, melSend: 0.52,
+    echo: [0.38, 0.36, 0.52],
+    busLevel: 0.8,
+    thinEvery: 2,
+  },
+  // ashen — DRAFT (compose properly during the Ashen Wastes session): dry,
+  // hollow Phrygian rub Em7 → Fmaj7 → Cmaj7(#11) → Bm7, driest echo of the three.
+  ashen: {
+    bpm: 63,
+    chords: [
+      ['E3', 'G3', 'B3', 'D4'], // Em7
+      ['F3', 'A3', 'C4', 'E4'], // Fmaj7 (the Phrygian E→F rub)
+      ['C3', 'G3', 'B3', 'F#4'], // Cmaj7(#11)
+      ['B2', 'F#3', 'A3', 'D4'], // Bm7
+    ],
+    chordVol: 0.02, chordAttack: 0.5, chordFilter: 700, chordSend: 0.3,
+    melody: [
+      [0, 2.0, 'E5', 1.5], [0, 5.5, 'D5', 1.5],
+      [1, 0.5, 'A5', 1.5], [1, 4.0, 'G5', 1],
+      [2, 2.5, 'F#5', 1.5], [2, 6.0, 'E5', 1],
+      [3, 1.0, 'D5', 1], [3, 3.5, 'B4', 1.5], [3, 6.0, 'A4', 2],
+    ],
+    melVol: 0.038, melAttack: 0.03, melSend: 0.45,
+    echo: [0.3, 0.28, 0.42],
+    busLevel: 0.8,
+    thinEvery: 2,
+  },
+};
+
+/** Biome → background-music track (levels default to woodlands). */
+export const BIOME_MUSIC: Record<'woodlands' | 'deepmarsh' | 'ashen', string> = {
+  woodlands: 'woodlands',
+  deepmarsh: 'deepmarsh',
+  ashen: 'ashen',
+};
